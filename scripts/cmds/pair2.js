@@ -1,254 +1,348 @@
 const axios = require("axios");
-const Canvas = require("canvas");
+const { createCanvas, loadImage } = require("canvas");
 const fs = require("fs");
 const path = require("path");
 
 module.exports = {
   config: {
     name: "pair2",
-    version: "3.0",
-    author: "xalman",
+    aliases: ["gf", "bf", "love", "crush", "couple"],
+    author: "Siam Ahmed Saan & Taha Khan",
+    version: "1.0.0",
     role: 0,
-    countDown: 5,
-    shortDescription: "Cute romantic pair system",
-    category: "LOVE"
+    category: "fun",
+    shortDescription: "🎀 Find your perfect match or pair with someone!",
+    longDescription: "Creates a stunning romantic match card. Mention someone to pair with them, or use without mention for a random match.",
+    guide: "{p}pair2 [mention] OR {p}pair2"
   },
 
   onStart: async function ({ api, event, usersData }) {
-    const { threadID, messageID, senderID, messageReply } = event;
-
     try {
-      let targetID = senderID;
-      let targetName = null;
-
-      if (messageReply) {
-        targetID = messageReply.senderID;
-        try {
-          const userData = await usersData.get(targetID);
-          targetName = userData.name || "User";
-        } catch {
-          targetName = "User";
-        }
-      }
-
-      const loading = await api.sendMessage("💗 | Finding your perfect partner...", threadID);
-
-      const [senderData, threadInfo] = await Promise.all([
-        usersData.get(targetID),
-        api.getThreadInfo(threadID)
-      ]);
-
-      const senderName = targetName || senderData.name || "User";
-      const senderGender = senderData.gender;
-
-      const members = threadInfo.participantIDs.filter(uid => uid != targetID);
+      const senderData = await usersData.get(event.senderID);
+      let senderName = senderData.name || "You";
       
-      let targetGender;
-      if (senderGender === 1) {
-        targetGender = 2;
-      } else if (senderGender === 2) {
-        targetGender = 1;
-      } else {
-        targetGender = Math.random() > 0.5 ? 1 : 2;
-      }
+      let selectedMatchID;
+      let matchName;
 
-      let partnerList = [];
-      const randomMembers = members.sort(() => 0.5 - Math.random());
-
-      for (const uid of randomMembers) {
-        try {
-          const data = await usersData.get(uid);
-          if (data && data.gender === targetGender) {
-            partnerList.push({ id: uid, name: data.name, gender: data.gender });
-          }
-        } catch {}
-      }
-
-      let partner;
-      
-      if (partnerList.length > 0) {
-        partner = partnerList[Math.floor(Math.random() * partnerList.length)];
-      } else {
-        let fallbackPartner = null;
+      // Agar kisi ko Mention kiya gaya hai (Null check added)
+      if (event.mentions && Object.keys(event.mentions).length > 0) {
+        selectedMatchID = Object.keys(event.mentions)[0];
+        // Mentioned naam ko saf karna
+        matchName = event.mentions[selectedMatchID].replace(/@/g, "").trim();
+      } 
+      // Agar mention nahi kiya, to random select karein
+      else {
+        const threadData = await api.getThreadInfo(event.threadID);
+        const users = threadData.userInfo;
         
-        for (const uid of randomMembers) {
-          try {
-            const data = await usersData.get(uid);
-            if (data && data.gender !== senderGender && data.gender !== undefined) {
-              fallbackPartner = { id: uid, name: data.name, gender: data.gender };
-              break;
-            }
-          } catch {}
+        const myData = users.find(user => user.id === event.senderID);
+        let myGender = myData?.gender?.toUpperCase() || (Math.random() > 0.5 ? "MALE" : "FEMALE");
+        
+        let matchCandidates = users.filter(u => u.id !== event.senderID);
+        if (myGender === "MALE") {
+          matchCandidates = matchCandidates.filter(u => u.gender === "FEMALE");
+        } else if (myGender === "FEMALE") {
+          matchCandidates = matchCandidates.filter(u => u.gender === "MALE");
         }
         
-        if (fallbackPartner) {
-          partner = fallbackPartner;
-        } else {
-          const fallbackId = randomMembers[Math.floor(Math.random() * randomMembers.length)];
-          partner = {
-            id: fallbackId,
-            name: "Someone Special",
-            gender: targetGender
-          };
+        if (!matchCandidates.length) {
+          matchCandidates = users.filter(u => u.id !== event.senderID);
         }
+        
+        const selectedMatch = matchCandidates[Math.floor(Math.random() * matchCandidates.length)];
+        selectedMatchID = selectedMatch.id;
+        matchName = selectedMatch.name || "Unknown";
       }
-
-      if (partner.gender === senderGender && senderGender !== undefined) {
-        for (const uid of randomMembers) {
-          try {
-            const data = await usersData.get(uid);
-            if (data && data.gender !== senderGender && data.gender !== undefined) {
-              partner = { id: uid, name: data.name, gender: data.gender };
-              break;
-            }
-          } catch {}
-        }
-      }
-
-      const match = Math.floor(Math.random() * 31) + 70;
-
-      const canvas = Canvas.createCanvas(1200, 700);
+      
+      // Canvas Creation & Design
+      const width = 1200;
+      const height = 750;
+      const canvas = createCanvas(width, height);
       const ctx = canvas.getContext("2d");
-
-      const gradient = ctx.createLinearGradient(0, 0, 1200, 700);
-      gradient.addColorStop(0, "#ffe6f2");
-      gradient.addColorStop(1, "#fff0f7");
-
+      
+      // Background Gradient
+      const gradient = ctx.createLinearGradient(0, 0, width, height);
+      gradient.addColorStop(0, "#0a0f1e");   
+      gradient.addColorStop(0.3, "#1a2639");  
+      gradient.addColorStop(0.7, "#2a3b4f"); 
+      gradient.addColorStop(1, "#1e2a3a");   
       ctx.fillStyle = gradient;
-      ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-      for (let i = 0; i < 50; i++) {
-        ctx.font = `${20 + Math.random() * 35}px sans-serif`;
-        ctx.fillStyle = "rgba(255,105,180,0.15)";
-        ctx.fillText("💖", Math.random() * canvas.width, Math.random() * canvas.height);
+      ctx.fillRect(0, 0, width, height);
+      
+      // Corner Decorations
+      ctx.shadowColor = '#ffd700';
+      ctx.shadowBlur = 20;
+      ctx.shadowOffsetX = 0;
+      ctx.shadowOffsetY = 0;
+      
+      ctx.beginPath(); ctx.moveTo(20, 20); ctx.lineTo(80, 20); ctx.lineTo(50, 60); ctx.closePath();
+      ctx.fillStyle = 'rgba(255, 215, 0, 0.3)'; ctx.fill();
+      
+      ctx.beginPath(); ctx.moveTo(width - 20, 20); ctx.lineTo(width - 80, 20); ctx.lineTo(width - 50, 60); ctx.closePath(); ctx.fill();
+      
+      ctx.beginPath(); ctx.moveTo(20, height - 20); ctx.lineTo(80, height - 20); ctx.lineTo(50, height - 60); ctx.closePath(); ctx.fill();
+      
+      ctx.beginPath(); ctx.moveTo(width - 20, height - 20); ctx.lineTo(width - 80, height - 20); ctx.lineTo(width - 50, height - 60); ctx.closePath(); ctx.fill();
+      
+      // Background Circles
+      ctx.shadowBlur = 15;
+      ctx.globalAlpha = 0.1;
+      for (let i = 0; i < 8; i++) {
+        ctx.beginPath();
+        ctx.arc(150 + i * 120, 200 + (i % 3) * 150, 80, 0, Math.PI * 2);
+        ctx.strokeStyle = '#ffd700';
+        ctx.lineWidth = 2;
+        ctx.stroke();
       }
-
-      ctx.strokeStyle = "#ffb6d9";
-      ctx.lineWidth = 16;
-      ctx.strokeRect(12, 12, canvas.width - 24, canvas.height - 24);
-
-      ctx.font = "55px sans-serif";
-      for (let i = 0; i < 6; i++) {
-        ctx.fillText("🎀", 80 + i * 190, 65);
+      ctx.globalAlpha = 1;
+      
+      // Star Dust
+      ctx.shadowBlur = 5;
+      ctx.globalAlpha = 0.4;
+      for (let i = 0; i < 100; i++) {
+        ctx.fillStyle = '#ffffff';
+        ctx.beginPath();
+        ctx.arc(Math.random() * width, Math.random() * height, Math.random() * 2 + 1, 0, Math.PI * 2);
+        ctx.fill();
       }
+      ctx.globalAlpha = 1;
+      ctx.shadowBlur = 0;
+      
+      // Top and Bottom Fade
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.1)';
+      ctx.shadowColor = '#000000';
+      ctx.shadowBlur = 20;
+      ctx.filter = 'blur(2px)';
+      ctx.fillRect(0, 0, width, 100);
+      ctx.fillRect(0, height - 100, width, 100);
+      ctx.filter = 'none';
+      ctx.shadowBlur = 0;
+      
+      // Title
+      ctx.font = 'bold 60px "Poppins", "Arial", sans-serif';
+      ctx.fillStyle = '#ffffff';
+      ctx.shadowColor = '#ffd700';
+      ctx.shadowBlur = 15;
+      ctx.fillText('✦ SOULMATES ✦', width/2 - 280, 70);
+      ctx.shadowBlur = 0;
+      
+      // Safely Load Avatars using Axios Buffer to avoid redirect issues
+      const fetchAvatar = async (id) => {
+        const url = `https://graph.facebook.com/${id}/picture?width=720&height=720&access_token=6628568379%7Cc1e620fa708a1d5696fb991c1bde5662`;
+        const response = await axios.get(url, { responseType: 'arraybuffer' });
+        return await loadImage(Buffer.from(response.data));
+      };
 
-      const token = "6628568379|c1e620fa708a1d5696fb991c1bde5662";
-
-      const avt1 = `https://graph.facebook.com/${targetID}/picture?width=512&height=512&access_token=${token}`;
-      const avt2 = `https://graph.facebook.com/${partner.id}/picture?width=512&height=512&access_token=${token}`;
-
-      async function loadImage(url) {
-        const response = await axios.get(url, {
-          responseType: "arraybuffer",
-          headers: { "User-Agent": "Mozilla/5.0" }
-        });
-        return await Canvas.loadImage(response.data);
-      }
-
-      const [img1, img2] = await Promise.all([loadImage(avt1), loadImage(avt2)]);
-
-      function drawCuteFrame(img, x, y) {
-        const size = 260;
-
-        ctx.shadowColor = "#ff69b4";
+      const senderAvatar = await fetchAvatar(event.senderID);
+      const partnerAvatar = await fetchAvatar(selectedMatchID);
+      
+      // Avatar Drawing Function
+      function drawLuxuryCircle(ctx, img, x, y, size) {
+        ctx.shadowColor = '#ffd700';
         ctx.shadowBlur = 30;
-
-        ctx.fillStyle = "#ffffff";
-        ctx.fillRect(x - 14, y - 14, size + 28, size + 28);
-
-        ctx.strokeStyle = "#ff8dc7";
-        ctx.lineWidth = 10;
-        ctx.strokeRect(x - 6, y - 6, size + 12, size + 12);
-
+        
+        ctx.save();
+        ctx.beginPath();
+        ctx.arc(x + size / 2, y + size / 2, size / 2 + 8, 0, Math.PI * 2);
+        ctx.strokeStyle = '#ffd700';
+        ctx.lineWidth = 5;
+        ctx.stroke();
+        
+        ctx.beginPath();
+        ctx.arc(x + size / 2, y + size / 2, size / 2 + 3, 0, Math.PI * 2);
+        ctx.strokeStyle = '#c0c0c0';
+        ctx.lineWidth = 4;
+        ctx.stroke();
+        
+        ctx.fillStyle = '#ffffff';
+        for (let i = 0; i < 8; i++) {
+          let angle = (i * Math.PI * 2) / 8;
+          let dotX = x + size / 2 + (size / 2 + 15) * Math.cos(angle);
+          let dotY = y + size / 2 + (size / 2 + 15) * Math.sin(angle);
+          ctx.beginPath();
+          ctx.arc(dotX, dotY, 4, 0, Math.PI * 2);
+          ctx.fill();
+        }
+        ctx.restore();
+        
+        ctx.save();
+        ctx.beginPath();
+        ctx.arc(x + size / 2, y + size / 2, size / 2, 0, Math.PI * 2);
+        ctx.closePath();
+        ctx.clip();
         ctx.drawImage(img, x, y, size, size);
-
+        ctx.restore();
+        
         ctx.shadowBlur = 0;
-
-        ctx.font = "35px sans-serif";
-
-        ctx.fillText("🎀", x - 18, y - 18);
-        ctx.fillText("🎀", x + size - 5, y - 18);
-
-        ctx.fillText("💖", x - 10, y + size + 28);
-        ctx.fillText("💖", x + size - 5, y + size + 28);
-      }
-
-      drawCuteFrame(img1, 120, 200);
-      drawCuteFrame(img2, 820, 200);
-
-      ctx.font = "130px sans-serif";
-      ctx.fillText("💗", 515, 355);
-
-      ctx.textAlign = "center";
-      ctx.fillStyle = "#ff1493";
-      ctx.font = "bold 48px Sans";
-      ctx.fillText(`${match}% MATCH`, 600, 520);
-
-      ctx.fillStyle = "#d63384";
-      ctx.font = "bold 32px Sans";
-      
-      let displayName1 = senderName;
-      let displayName2 = partner.name;
-      
-      if (displayName1.length > 15) {
-        displayName1 = displayName1.substring(0, 15) + "...";
-      }
-      if (displayName2.length > 15) {
-        displayName2 = displayName2.substring(0, 15) + "...";
       }
       
-      ctx.fillText(displayName1, 250, 585);
-      ctx.fillText(displayName2, 950, 585);
-
-      ctx.font = "28px Sans";
-      ctx.fillStyle = "#ff69b4";
-      ctx.fillText("Made with Love 💕", 600, 650);
-
+      drawLuxuryCircle(ctx, senderAvatar, 150, 180, 240);
+      drawLuxuryCircle(ctx, partnerAvatar, width - 390, 180, 240);
+      
+      // Name Plate Drawing Function
+      function drawLuxuryNamePlate(ctx, name, x, y, width, height) {
+        ctx.shadowColor = '#000000';
+        ctx.shadowBlur = 15;
+        ctx.shadowOffsetX = 3;
+        ctx.shadowOffsetY = 3;
+        
+        const plateGradient = ctx.createLinearGradient(x, y, x + width, y + height);
+        plateGradient.addColorStop(0, 'rgba(26, 26, 46, 0.9)');
+        plateGradient.addColorStop(0.5, 'rgba(45, 55, 75, 0.9)');
+        plateGradient.addColorStop(1, 'rgba(26, 26, 46, 0.9)');
+        
+        ctx.fillStyle = plateGradient;
+        
+        ctx.beginPath();
+        ctx.moveTo(x + 20, y);
+        ctx.lineTo(x + width - 20, y);
+        ctx.quadraticCurveTo(x + width, y, x + width, y + 15);
+        ctx.lineTo(x + width, y + height - 15);
+        ctx.quadraticCurveTo(x + width, y + height, x + width - 20, y + height);
+        ctx.lineTo(x + 20, y + height);
+        ctx.quadraticCurveTo(x, y + height, x, y + height - 15);
+        ctx.lineTo(x, y + 15);
+        ctx.quadraticCurveTo(x, y, x + 20, y);
+        ctx.closePath();
+        ctx.fill();
+        
+        ctx.shadowBlur = 0;
+        ctx.shadowOffsetX = 0;
+        ctx.shadowOffsetY = 0;
+        
+        ctx.strokeStyle = '#ffd700';
+        ctx.lineWidth = 3;
+        ctx.stroke();
+        
+        ctx.strokeStyle = '#c0c0c0';
+        ctx.lineWidth = 1.5;
+        ctx.stroke();
+        
+        const textGradient = ctx.createLinearGradient(x + 10, y + 10, x + width - 10, y + height - 10);
+        textGradient.addColorStop(0, '#ffffff');
+        textGradient.addColorStop(1, '#ffd700');
+        
+        ctx.font = 'bold 30px "Poppins", "Arial", sans-serif';
+        ctx.fillStyle = textGradient;
+        ctx.shadowColor = '#ffd700';
+        ctx.shadowBlur = 8;
+        
+        let textWidth = ctx.measureText(name).width;
+        ctx.fillText(name, x + (width - textWidth)/2, y + 45);
+        
+        ctx.font = '15px "Arial"';
+        ctx.fillStyle = '#ffd700';
+        ctx.fillText('✦', x + 15, y + 30);
+        ctx.fillText('✦', x + width - 30, y + 30);
+        ctx.fillText('✦', x + 15, y + height - 10);
+        ctx.fillText('✦', x + width - 30, y + height - 10);
+        
+        ctx.shadowBlur = 0;
+      }
+      
+      drawLuxuryNamePlate(ctx, senderName, 120, 460, 300, 65);
+      drawLuxuryNamePlate(ctx, matchName, width - 420, 460, 300, 65);
+      
+      // Center Heart Drawing Function
+      function drawLuxuryHeart(ctx, centerX, centerY, size) {
+        ctx.save();
+        ctx.shadowColor = '#ffd700';
+        ctx.shadowBlur = 40;
+        
+        ctx.beginPath();
+        ctx.moveTo(centerX, centerY - size * 0.5);
+        ctx.bezierCurveTo(
+          centerX - size * 0.6, centerY - size * 0.9,
+          centerX - size * 1.2, centerY + size * 0.2,
+          centerX, centerY + size * 0.9
+        );
+        ctx.bezierCurveTo(
+          centerX + size * 1.2, centerY + size * 0.2,
+          centerX + size * 0.6, centerY - size * 0.9,
+          centerX, centerY - size * 0.5
+        );
+        
+        const heartGradient = ctx.createRadialGradient(centerX, centerY, 0, centerX, centerY, size);
+        heartGradient.addColorStop(0, '#ff6b6b');
+        heartGradient.addColorStop(0.5, '#ff4757');
+        heartGradient.addColorStop(1, '#c44569');
+        ctx.fillStyle = heartGradient;
+        ctx.fill();
+        
+        ctx.strokeStyle = '#ffd700';
+        ctx.lineWidth = 4;
+        ctx.stroke();
+        ctx.restore();
+      }
+      
+      drawLuxuryHeart(ctx, width / 2, 330, 90);
+      
+      // Percentage Text Background
+      ctx.shadowBlur = 20;
+      ctx.fillStyle = 'rgba(255, 215, 0, 0.2)';
+      ctx.beginPath();
+      ctx.ellipse(width / 2, 560, 150, 40, 0, 0, Math.PI * 2);
+      ctx.fill();
+      
+      // Calculate Percentage (Mention 90-100%, Random 70-100%)
+      const isMentioned = event.mentions && Object.keys(event.mentions).length > 0;
+      const lovePercent = isMentioned ? (Math.floor(Math.random() * 11) + 90) : (Math.floor(Math.random() * 31) + 70);
+      
+      ctx.font = 'bold 35px "Poppins", "Arial", sans-serif';
+      ctx.fillStyle = '#ffd700';
+      ctx.shadowColor = '#ffffff';
+      ctx.fillText(`♡ ${lovePercent}% MATCH ♡`, width/2 - 160, 570);
+      
+      ctx.font = 'italic 22px "Georgia", serif';
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.7)';
+      ctx.shadowBlur = 5;
+      ctx.fillText('"Two souls, one heart"', width/2 - 120, 650);
+      ctx.shadowBlur = 0;
+      
+      // Fixed the directory issue here (Standard Node.js fs implementation)
       const cacheDir = path.join(__dirname, "cache");
       if (!fs.existsSync(cacheDir)) {
         fs.mkdirSync(cacheDir, { recursive: true });
       }
-
-      const filePath = path.join(cacheDir, `pair_${Date.now()}.png`);
-      fs.writeFileSync(filePath, canvas.toBuffer());
-
-      if (loading && loading.messageID) {
-        try {
-          await api.unsendMessage(loading.messageID, threadID);
-        } catch {}
-      }
-
-      const emoji = match > 85 ? "💞" : match > 75 ? "💗" : "💕";
-      const compatibility = match > 85 ? "Perfect" : match > 75 ? "Great" : "Good";
       
-      const genderEmoji1 = senderGender === 1 ? "👦" : senderGender === 2 ? "👧" : "👤";
-      const genderEmoji2 = partner.gender === 1 ? "👦" : partner.gender === 2 ? "👧" : "👤";
+      const outputPath = path.join(cacheDir, `pair2_${Date.now()}.png`);
+      const out = fs.createWriteStream(outputPath);
+      const stream = canvas.createPNGStream();
+      stream.pipe(out);
 
-      const msg = `${emoji} 𝗣𝗘𝗥𝗙𝗘𝗖𝗧 𝗣𝗔𝗜𝗥
+      out.on("finish", () => {
+        const messageText = `🦋 𝗬𝗼𝘂𝗿 ${isMentioned ? "𝗖𝗵𝗼𝘀𝗲𝗻" : "𝗥𝗮𝗻𝗱𝗼𝗺"} 𝗠𝗮𝘁𝗰𝗵 
 
-${genderEmoji1} ${senderName} ✦ ${genderEmoji2} ${partner.name}
-📊 ${match}% ${compatibility} Match
-💘 Status: Matched!`;
+╔══════════════════════╗
+    🌸 𝐘𝐎𝐔𝐑 𝐏𝐄𝐑𝐅𝐄𝐂𝐓 𝐒𝐎𝐔𝐋𝐌𝐀𝐓𝐄 🕊️
+╚══════════════════════╝
 
-      return api.sendMessage(
-        {
-          body: msg,
-          attachment: fs.createReadStream(filePath)
-        },
-        threadID,
-        () => {
-          if (fs.existsSync(filePath)) {
-            try {
-              fs.unlinkSync(filePath);
-            } catch {}
-          }
-        },
-        messageID
+🎀 𝗬𝗼𝘂: ${senderName}
+🎀 𝗠𝗮𝘁𝗰𝗵: ${matchName}
+
+━━━━━━━━━━━━━━━━━━━━━
+   🎀 𝗖𝗼𝗺𝗽𝗮𝘁𝗶𝗯𝗶𝗹𝗶𝘁𝘆: ${lovePercent}% 🦋
+━━━━━━━━━━━━━━━━━━━━━`;
+
+        api.sendMessage(
+          { 
+            body: messageText, 
+            attachment: fs.createReadStream(outputPath),
+            mentions: isMentioned ? [{ tag: matchName, id: selectedMatchID }] : []
+          },
+          event.threadID,
+          () => fs.unlinkSync(outputPath),
+          event.messageID
+        );
+      });
+
+    } catch (error) {
+      console.log(error); // Logs to terminal to help debug future issues
+      api.sendMessage(
+        "❌ An error occurred while generating the match card.\n" + error.message,
+        event.threadID,
+        event.messageID
       );
-
-    } catch (err) {
-      console.log(err);
-      return api.sendMessage("❌ | Pair system failed!", threadID, messageID);
     }
-  }
+  },
 };

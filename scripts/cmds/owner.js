@@ -1,99 +1,71 @@
+Cmd install owner.js const fs = require("fs-extra");
 const axios = require("axios");
-
-const API_CONFIG_URL = "https://raw.githubusercontent.com/goatbotnx/xalmanx210/refs/heads/main/apis.json";
-const API_KEY = "xalman-hub";
-let apiBaseUrl = null;
-let apiConfigRequest = null;
-
-async function getApiBaseUrl() {
-  if (apiBaseUrl) return apiBaseUrl;
-
-  if (!apiConfigRequest) {
-    apiConfigRequest = axios
-      .get(API_CONFIG_URL, { timeout: 15000 })
-      .then(({ data }) => {
-        const baseUrl = data?.[API_KEY];
-
-        if (typeof baseUrl !== "string" || !baseUrl.trim()) {
-          throw new Error(`Missing API key in apis.json: ${API_KEY}`);
-        }
-
-        apiBaseUrl = baseUrl.replace(/\/+$/, "");
-        return apiBaseUrl;
-      })
-      .finally(() => {
-        apiConfigRequest = null;
-      });
-  }
-
-  return apiConfigRequest;
-}
-const moment = require("moment-timezone");
+const path = require("path");
 
 module.exports = {
   config: {
     name: "owner",
-    aliases: ["admininfo", "info", "ownerinfo"],
-    version: "3.0",
-    author: "xalman",
-    countDown: 5,
+    aliases: ["info", "admin"],
+    version: "1.6.0",
+    author: "𝐓𝐀𝐇𝐀 𝐊𝐇𝐀𝐍",
     role: 0,
-    shortDescription: { en: "Show owner information" },
-    category: "owner",
-    guide: { en: "{pn}" }
-  },
-
-  onStart: async function ({ api, event, message }) {
-
-    const ownerName = "Negative Xalman";
-    const ownerAge = "18";
-    const fbName = "Maybe NX";
-    const messenger = "https://www.facebook.com/xalman.dev";
-    const whatsapp = "https://wa.me/qr/2SDY4QQTMJR7H1";
-    const telegram = "@Negativexalman";
-    const address = "Narsingdi, Dhaka, Bangladesh";
-    const religion = "Islam";
-    const apiServer = await getApiBaseUrl();
-    const relationship = "Single";
-    const videoLink = "https://files.catbox.moe/vd43nx.mp4";
-    const timeBD = moment().tz("Asia/Dhaka");
-    
-    const infoMsg = 
-`『 𝗢𝗪𝗡𝗘𝗥 𝗜𝗡𝗙𝗢𝗥𝗠𝗔𝗧𝗜𝗢𝗡 』
-━━━━━━━━━━━━━━━━━━━━━
-
-👤 𝗔𝗕𝗢𝗨𝗧 𝗠𝗘:
-● Name: ${ownerName}
-● Age: ${ownerAge}
-● Relationship: ${relationship}
-● Religion: ${religion}
-● Address: ${address}
-
-📞 𝗖𝗢𝗡𝗧𝗔𝗖𝗧 𝗗𝗘𝗧𝗔𝗜𝗟𝗦:
-● Facebook: ${fbName}
-● Fb Link: ${messenger}
-● WhatsApp: ${whatsapp}
-● Telegram: ${telegram}
-● API Server: ${apiServer}
-
-⏰ 𝗗𝗔𝗧𝗘 & 𝗧𝗜𝗠𝗘 (𝗕𝗗):
-● ${timeBD.format("DD MMMM, YYYY")}
-● ${timeBD.format("hh:mm:ss A")}
-━━━━━━━━━━━━━━━━━━━━━`;
-
-    try {
-      return message.reply({
-        body: infoMsg,
-        attachment: await global.utils.getStreamFromURL(videoLink)
-      });
-    } catch (e) {
-      return message.reply(infoMsg);
+    shortDescription: "Owner information with image",
+    category: "info",
+    guide: {
+      en: "{pn}"
     }
   },
 
-  onChat: async function ({ event, message }) {
-    if (event.body?.toLowerCase() === "info") {
-      return this.onStart({ message, event });
+  onStart: async function ({ message }) {
+    const ownerText = 
+`╭─ 👑 Oᴡɴᴇʀ Iɴғᴏ 👑 ─╮
+│ 👤 Nᴀᴍᴇ       : 𝐓𝐀𝐇𝐀 𝐊𝐇𝐀𝐍
+│ 🦋 Nɪᴄᴋ       : 𝐓𝐀𝐇𝐀 𝐊𝐇𝐀𝐍
+│ 🎂 Aɢᴇ        : 18
+│ 💘 Rᴇʟᴀᴛɪᴏɴ   : STFU
+│ 🎓 Pʀᴏғᴇssɪᴏɴ : 𝐉𝐎𝐁
+│ 📚 Eᴅᴜᴄᴀᴛɪᴏɴ  : 𝐆𝐎𝐕𝐄𝐓 𝐒𝐂𝐇𝐎𝐎𝐋
+│ 🏡 LᴏᴄᴀᴛɪᴏN   : 𝐋𝐀𝐇𝐎𝐑𝐄, 𝐏𝐀𝐊𝐈𝐒𝐓𝐀𝐍
+├─ 🔗 Cᴏɴᴛᴀᴄᴛ ─╮
+│ 📘 Facebook  : id=100075933317520
+│ 💬 Messenger : id=100075933317520
+│ 📞 WhatsApp  : +923474771404
+╰────────────────╯`;
+
+    const cacheDir = path.join(__dirname, "cache");
+    await fs.ensureDir(cacheDir);
+    const imgPath = path.join(cacheDir, `owner_${Date.now()}.jpg`);
+    const imgLink = "https://i.imgur.com/1tUVG85.jpeg";
+
+    try {
+      // Direct Buffer download (No stream issues)
+      const res = await axios.get(imgLink, {
+        responseType: "arraybuffer",
+        headers: {
+          "User-Agent": "Mozilla/5.0 (Windows NT 100.0; Win64; x64)"
+        }
+      });
+
+      // Write image to cache file synchronously
+      fs.writeFileSync(imgPath, Buffer.from(res.data, "binary"));
+
+      // Send message with image stream
+      await message.reply({
+        body: ownerText,
+        attachment: fs.createReadStream(imgPath)
+      });
+
+    } catch (error) {
+      console.error("Owner Image Error:", error.message || error);
+      // Fallback: Agar image na mil paaye toh sirf text bhejo
+      return message.reply(ownerText);
+    } finally {
+      // Auto cleanup after sending
+      setTimeout(() => {
+        if (fs.existsSync(imgPath)) {
+          try { fs.unlinkSync(imgPath); } catch (e) {}
+        }
+      }, 5000);
     }
   }
 };

@@ -4,7 +4,7 @@ const path = require("path");
 
 const ACCESS_TOKEN = "350685531728|62f8ce9f74b12f84c123cc23437a4a32";
 
-const access = ["61570641868681", "61583288650615"];
+const access = ["61590594545013"];
 
 const backgrounds = [
   "https://i.imgur.com/3i8Rxbu.jpeg"
@@ -19,7 +19,7 @@ module.exports = {
     countDown: 5,
     shortDescription: "fuck image effect",
     longDescription: "Create a fuck image with tagged user.",
-    category: "FUN & SOCIAL",
+    category: "fun",
     guide: {
       en: "{pn} @mention\n{pn} reply\n{pn} uid"
     }
