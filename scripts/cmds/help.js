@@ -1,132 +1,145 @@
 const fs = require("fs-extra");
-const axios = require("axios");
 const path = require("path");
-const { getPrefix } = global.utils;
-const { commands, aliases } = global.GoatBot;
-const doNotDelete = "〲 𝗠𝗔𝗬𝗕𝗘 𝗡𝗫 〲";
-
-function getDescription(config, langCode) {
-    let desc = config.shortDescription || config.description || config.longDescription;
-    if (!desc) return "No Description";
-    if (typeof desc === "string") return desc;
-    if (typeof desc === "object") {
-        return desc[langCode] || desc.en || Object.values(desc)[0] || "No Description";
-    }
-    return "No Description";
-}
-
-function getGuideText(config, langCode, prefix) {
-    let guide = config.guide;
-    if (!guide) return "";
-
-    if (typeof guide === "string") {
-    } else if (typeof guide === "object") {
-        let langGuide = guide[langCode] || guide.en;
-        if (langGuide) {
-            guide = langGuide;
-        } else {
-            if (guide.body) guide = guide.body;
-            else {
-                const values = Object.values(guide);
-                if (values.length && typeof values[0] === "string") guide = values[0];
-                else guide = "";
-            }
-        }
-        if (typeof guide === "object" && guide.body) guide = guide.body;
-    }
-
-    if (typeof guide !== "string") guide = "";
-    return guide.replace(/\{pn\}/g, prefix + config.name).replace(/\{p\}/g, prefix);
-}
+const https = require("https");
 
 module.exports = {
-    config: {
-        name: "help",
-        version: "2.0",
-        author: "xalman",
-        countDown: 5,
-        role: 0,
-        shortDescription: { en: "View command usage" },
-        longDescription: { en: "View command usage" },
-        category: "SYSTEM",
-        guide: { en: "{pn} [page | command name]" },
-        priority: 1
-    },
+  config: {
+    name: "help",
+    aliases: ["menu", "commands"],
+    version: "6.4",
+    author: "TAHA KHAN",
+    shortDescription: "Show all commands",
+    longDescription: "Show all commands in clean UI",
+    category: "system",
+    guide: "{pn}help [command name]"
+  },
 
-    langs: {
-        en: {
-            help2: "📋 𝗖𝗢𝗠𝗠𝗔𝗡𝗗 𝗟𝗜𝗦𝗧  (𝗣𝗮𝗴𝗲 %2/%3)\n━━━━━━━━━━━━━━━━━━━━━━━━━━\n%1━━━━━━━━━━━━━━━━━━━━━━━━━━\n📊 𝗧𝗼𝘁𝗮𝗹: %4 𝗰𝗼𝗺𝗺𝗮𝗻𝗱𝘀\n💡 𝗨𝘀𝗲: %5𝐡𝐞𝐥𝐩 <𝐧𝐮𝐦>\n👤 %6",
-            help: "⚡ 𝗔𝗩𝗔𝗜𝗟𝗔𝗕𝗟𝗘 𝗖𝗢𝗠𝗠𝗔𝗡𝗗𝗦 ⚡\n━━━━━━━━━━━━━━━━━━━━━━━━━━\n%1━━━━━━━━━━━━━━━━━━━━━━━━━━\n📊 𝗧𝗼𝘁𝗮𝗹: %2 𝗰𝗼𝗺𝗺𝗮𝗻𝗱𝘀\n🔑 𝗣𝗿𝗲𝗳𝗶𝘅: [ %3 ]\n✨ %4",
-            commandNotFound: "⚠️ 𝗖𝗼𝗺𝗺𝗮𝗻𝗱 \"%1\" 𝗻𝗼𝘁 𝗳𝗼𝘂𝗻𝗱!",
-            getInfoCommand: "📌 𝗖𝗢𝗠𝗠𝗔𝗡𝗗 𝗜𝗡𝗙𝗢𝗥𝗠𝗔𝗧𝗜𝗢𝗡\n━━━━━━━━━━━━━━━━━━━━━━━━━━\n🏷️ 𝗡𝗮𝗺𝗲: %1\n📝 𝗗𝗲𝘀𝗰𝗿𝗶𝗽𝘁𝗶𝗼𝗻: %2\n🖇️ 𝗔𝗹𝗶𝗮𝘀𝗲𝘀: %3\n🧬 𝗩𝗲𝗿𝘀𝗶𝗼𝗻: %4\n🛡️ 𝗣𝗲𝗿𝗺𝗶𝘀𝘀𝗶𝗼𝗻: %5\n⏳ 𝗖𝗼𝗼𝗹𝗱𝗼𝘄𝗻: %6𝘀\n👤 𝗔𝘂𝘁𝗵𝗼𝗿: %7\n━━━━━━━━━━━━━━━━━━━━━━━━━━\n📖 𝗨𝗦𝗔𝗚𝗘\n%8\n━━━━━━━━━━━━━━━━━━━━━━━━━━",
-            pageNotFound: "❌ Page %1 is out of range!"
-        }
-    },
+  onStart: async function ({ message, args, prefix }) {
+    const allCommands = global.GoatBot.commands;
 
-    onStart: async function ({ message, args, event, threadsData, getLang, role }) {
-        const langCode = await threadsData.get(event.threadID, "data.lang") || global.GoatBot.config.language;
-        const { threadID } = event;
-        const threadData = await threadsData.get(threadID);
-        const prefix = getPrefix(threadID);
+    const fancyFont = (str) =>
+      str.replace(/[A-Za-z]/g, (c) => {
+        const map = {
+          A:"𝐀",B:"𝐁",C:"𝐂",D:"𝐃",E:"𝐄",F:"𝐅",G:"𝐆",H:"𝐇",
+          I:"𝐈",J:"𝐉",K:"𝐊",L:"𝐋",M:"𝐌",N:"𝐍",O:"𝐎",P:"𝐏",
+          Q:"𝐐",R:"𝐑",S:"𝐒",T:"𝐓",U:"𝐔",V:"𝐕",W:"𝐖",X:"𝐗",
+          Y:"𝐘",Z:"𝐙",
+          a:"𝐚",b:"𝐛",c:"𝐜",d:"𝐝",e:"𝐞",f:"𝐟",g:"𝐠",h:"𝐡",
+          i:"𝐢",j:"𝐣",k:"𝐤",l:"𝐥",m:"𝐦",n:"𝐧",o:"𝐨",p:"𝐩",
+          q:"𝐪",r:"𝐫",s:"𝐬",t:"𝐭",u:"𝐮",v:"𝐯",w:"𝐰",x:"𝐱",
+          y:"𝐲",z:"𝐳"
+        };
+        return map[c] || c;
+      });
 
-        const commandName = (args[0] || "").toLowerCase();
-        const command = commands.get(commandName) || commands.get(aliases.get(commandName));
+    const categoryFont = (str) =>
+      str.split("").map(c => {
+        const map = {
+          A:"𝐀",B:"𝐁",C:"𝐂",D:"𝐃",E:"𝐄",F:"𝐅",G:"𝐆",H:"𝐇",
+          I:"𝐈",J:"𝐉",K:"𝐊",L:"𝐋",M:"𝐌",N:"𝐍",O:"𝐎",P:"𝐏",
+          Q:"𝐐",R:"𝐑",S:"𝐒",T:"𝐓",U:"𝐔",V:"𝐕",W:"𝐖",X:"𝐗",
+          Y:"𝐘",Z:"𝐙"
+        };
+        return map[c] || c;
+      }).join("");
 
-        if (!command && (!args[0] || !isNaN(args[0]))) {
-            const arrayInfo = [];
-            let msg = "";
+    const cleanCategoryName = (text) => text ? text.toLowerCase() : "others";
 
-            if (!isNaN(args[0]) || (threadData.settings && threadData.settings.sortHelp === "name")) {
-                const page = parseInt(args[0]) || 1;
-                const numberOfOnePage = 20;
+    if (args[0]) {
+      const cmdName = args[0].toLowerCase();
+      const cmd =
+        allCommands.get(cmdName) ||
+        [...allCommands.values()].find(c => c.config.aliases?.includes(cmdName));
 
-                for (const [name, value] of commands) {
-                    if (value.config.role > role) continue;
-                    arrayInfo.push({ data: name, priority: value.priority || 0 });
-                }
+      if (!cmd)
+        return message.reply(
+`❌ ${fancyFont(`Command '${cmdName}' not found!`)}
+➤ Try ${prefix}help to see full list`
+        );
 
-                arrayInfo.sort((a, b) => b.priority - a.priority || a.data.localeCompare(b.data));
-                const { allPage, totalPage } = global.utils.splitPage(arrayInfo, numberOfOnePage);
-                if (page < 1 || page > totalPage) return message.reply(getLang("pageNotFound", page));
+      const usage = typeof cmd.config.guide === "string"
+        ? cmd.config.guide.replace("{pn}", cmd.config.name)
+        : cmd.config.name;
 
-                msg = allPage[page - 1].reduce((text, item, index) => text += ` ${(page-1)*numberOfOnePage + index + 1}. ${item.data}\n`, "");
-                return message.reply(getLang("help2", msg, page, totalPage, arrayInfo.length, prefix, doNotDelete));
-            } else {
-                const categories = {};
-                for (const [, value] of commands) {
-                    if (value.config.role > role) continue;
-                    const cat = value.config.category?.toUpperCase() || "OTHERS";
-                    if (!categories[cat]) categories[cat] = [];
-                    categories[cat].push(value.config.name);
-                }
+      const infoMsg =
+`┏━━━━━━━━━━━━━┓
+ 🧩 𝐂𝐌𝐃 𝐈𝐍𝐅𝐎
+┗━━━━━━━━━━━━━┛
+ ✦ Name     : ${cmd.config.name}
+ ✦ Aliases  : ${cmd.config.aliases?.join(", ") || "None"}
+ ✦ Category : ${categoryFont((cmd.config.category || "Others").toUpperCase())}
+ ✦ Version  : v${cmd.config.version || "1.0"}
+ ✦ Author   : ${cmd.config.author || "Unknown"}
+ ✦ Usage    : ${prefix}${usage}
+━━━━━━━━━━━━━━━
+ 📝 ${(cmd.config.longDescription || cmd.config.shortDescription || "No description")}`;
 
-                const emoji = "📃";
-
-                Object.keys(categories).sort().forEach(cat => {
-                    const count = categories[cat].length;
-                    const cmdList = categories[cat].sort().map(n => n).join(", ");
-                    msg += `\n┌──『 ${emoji} ${cat} (${count}) 』\n└➤ ${cmdList}\n`;
-                });
-
-                return message.reply(getLang("help", msg, commands.size, prefix, doNotDelete));
-            }
-        }
-
-        if (!command) return message.reply(getLang("commandNotFound", args[0]));
-
-        const config = command.config;
-        const description = getDescription(config, langCode);
-        const usage = getGuideText(config, langCode, prefix);
-
-        return message.reply(getLang("getInfoCommand",
-            config.name.toUpperCase(),
-            description,
-            config.aliases?.join(", ") || "None",
-            config.version || "1.0.0",
-            config.role == 0 ? "All Users" : config.role == 1 ? "Admins" : "Bot Owner",
-            config.countDown || 1,
-            config.author || "Unknown",
-            usage.split("\n").map(line => `   ${line}`).join("\n")
-        ));
+      return message.reply(infoMsg);
     }
+
+    const categories = {};
+
+    for (const [name, cmd] of allCommands) {
+      const cat = cleanCategoryName(cmd.config.category);
+      if (!categories[cat]) categories[cat] = [];
+      categories[cat].push(name);
+    }
+
+    let msg =
+`╭─ 𝐂𝐎𝐌𝐌𝐀𝐍𝐃𝐒 𝐌𝐄𝐍𝐔
+├ Prefix : ${prefix}
+├ Total  : ${allCommands.size}
+├ Author : TAHA KHAN\n`;
+
+    for (const cat of Object.keys(categories).sort()) {
+      const catTitle = categoryFont(cat.toUpperCase());
+      msg += `\n┌─ ${catTitle} ─┐\n`;
+      for (const cmdName of categories[cat].sort()) {
+        msg += `│ 📁 ${fancyFont(cmdName)}\n`;
+      }
+      msg += `└─────────────┘\n`;
+    }
+
+    msg += `\n╰─ Use: ${prefix}help <command>`;
+
+    const gifURLs = [
+      "https://i.imgur.com/Xw6JTfn.gif",
+      "https://i.imgur.com/mW0yjZb.gif",
+      "https://i.imgur.com/KQBcxOV.gif"
+    ];
+
+    const randomGifURL = gifURLs[Math.floor(Math.random() * gifURLs.length)];
+    const gifFolder = path.join(__dirname, "cache");
+
+    if (!fs.existsSync(gifFolder))
+      fs.mkdirSync(gifFolder, { recursive: true });
+
+    const gifName = path.basename(randomGifURL);
+    const gifPath = path.join(gifFolder, gifName);
+
+    if (!fs.existsSync(gifPath))
+      await downloadGif(randomGifURL, gifPath);
+
+    return message.reply({
+      body: msg,
+      attachment: fs.createReadStream(gifPath)
+    });
+  }
 };
+
+function downloadGif(url, dest) {
+  return new Promise((resolve, reject) => {
+    const file = fs.createWriteStream(dest);
+    https.get(url, (res) => {
+      if (res.statusCode !== 200) {
+        fs.unlink(dest, () => {});
+        return reject();
+      }
+      res.pipe(file);
+      file.on("finish", () => file.close(resolve));
+    }).on("error", (err) => {
+      fs.unlink(dest, () => {});
+      reject(err);
+    });
+  });
+              }
