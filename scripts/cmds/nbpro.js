@@ -3,7 +3,7 @@ module.exports = {
     config: {
         name: "nbpro",
         version: "1.0",
-        aliases: ["edit", "nb", "nanobanana", "nanobanana-pro"],
+        aliases: ["edit", "nb", "nanobanana-pro"],
         author: "Siam Ahmed Saan",
         category: "ai",
         countDown: 5,
