@@ -9,7 +9,7 @@ module.exports = {
   config: {
     name: "dewani",
     aliases: [], 
-    version: "31.0.3",
+    version: "31.0.4",
     author: "TAHA KHAN",
     countDown: 2,
     role: 0,
@@ -367,10 +367,17 @@ Dewani:`;
       (String(event.messageReply?.senderID) === String(botID) || String(event.messageReply?.author) === String(botID));
 
     let startsWithTrigger = false;
+    
     for (const word of this.TRIGGER_WORDS) {
       const reg = new RegExp(`^${word}\\b`, "i");
       if (reg.test(body)) {
-        startsWithTrigger = true;
+        // 🔥 Yahan check hai: Trigger word ke baad kuch text bacha hai ya nahi
+        // Agar sirf "bot" likha hai aur aage kuch nahi, to reply NAHI karega.
+        const textAfterTrigger = body.replace(reg, "").replace(/^[\s,!.?:-]+/, "").trim();
+        
+        if (textAfterTrigger.length > 0) {
+          startsWithTrigger = true;
+        }
         break;
       }
     }
