@@ -1,53 +1,68 @@
-const axios = require("axios");
+Cmd install anisearch.js const axios = require("axios");
+
+async function fetchTikTokVideo(query) {
+  try {
+    const response = await axios.get(
+      `https://toshiro-api-editz6t9.vercel.app/api/search/tiksearch?keyword=${encodeURIComponent(query)}`,
+      { timeout: 25000 }
+    );
+    if (response.data && response.data.success && response.data.result) {
+      return response.data.result;
+    }
+    return null;
+  } catch (error) {
+    console.error("Anisearch API Error:", error.message || error);
+    return null;
+  }
+}
 
 module.exports = {
   config: {
     name: "anisearch",
-    aliases: ["ani"],
-    version: "2.2",
-    author: "Anik Islam Sadik",
-    countDown: 3,
+    aliases: ["aniedit", "animeedit"],
+    author: "TAHA KHAN",
+    version: "1.1.0",
+    countDown: 5,
     role: 0,
-    description: "Search and get Anime TikTok videos",
-    category: "ANIME & MEDIA",
-    guide: "{pn} <anime name>"
+    shortDescription: {
+      en: "Get anime edit video"
+    },
+    longDescription: {
+      en: "Search for anime edit videos from TikTok"
+    },
+    category: "media",
+    guide: {
+      en: "{pn} <anime name or query>"
+    }
   },
 
-  onStart: async function ({ api, event, message, args }) {
-    const { threadID, messageID } = event;
-    const query = args.join(" ");
-    if (!query) return message.reply("❌ Please provide an anime name to search.");
+  onStart: async function ({ api, event, args, message }) {
+    const query = args.join(" ").trim();
+    if (!query) {
+      return message.reply("❌ Please provide an anime name or query.");
+    }
 
-    api.setMessageReaction("✨", messageID, () => {}, true);
-
-    const API_URL = `https://xalman-apis.vercel.app/api/anisearch?q=${encodeURIComponent(query)}`;
+    if (api.setMessageReaction) {
+      api.setMessageReaction("✨", event.messageID, (err) => {}, true);
+    }
 
     try {
-      const res = await axios.get(API_URL, { timeout: 15000 });
-      const results = res.data.results;
+      const modifiedQuery = `${query} anime edit`;
+      const result = await fetchTikTokVideo(modifiedQuery);
 
-      if (!results || results.length === 0) {
-        api.setMessageReaction("❌", messageID, () => {}, true);
-        return message.reply(`❌ No videos found for "${query}".`);
+      if (!result || !result.video) {
+        return message.reply(`❌ No anime edits found for "${query}".`);
       }
 
-      const video = results[0];
-      const stream = await global.utils.getStreamFromURL(video.video_url);
+      const videoStream = await global.utils.getStreamFromURL(result.video, "anime_edit.mp4");
 
-      api.setMessageReaction("✅", messageID, () => {}, true);
-
-      const msg = `🎀 𝗔𝗡𝗜𝗠𝗘 𝗦𝗘𝗔𝗥𝗖𝗛 𝗥𝗘𝗦𝗨𝗟𝗧
-━━━━━━━━━━━━━━━━━━`;
-
-      return api.sendMessage({
-        body: msg,
-        attachment: stream
-      }, threadID, messageID);
-
-    } catch (e) {
-      console.error(e);
-      api.setMessageReaction("❌", messageID, () => {}, true);
-      return message.reply("❌ Error fetching video. Please try again.");
+      await message.reply({
+        body: `🎬 Anime Edit: ${result.title || query}\n👤 Creator: @${result.author || "Unknown"}\n⏱️ Duration: ${result.duration || 0}s`,
+        attachment: videoStream
+      });
+    } catch (error) {
+      console.error("Anisearch error:", error);
+      message.reply("❌ An error occurred while processing the video. Please try again later.");
     }
   }
 };
