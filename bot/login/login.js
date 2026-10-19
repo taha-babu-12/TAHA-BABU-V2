@@ -10,7 +10,7 @@ const readline = defaultRequire("readline");
 const fs = defaultRequire("fs-extra");
 const QRCodeReader = defaultRequire("qrcode-reader");
 const Canvas = defaultRequire("canvas");
-const fca = defaultRequire("@bruxa/stfca");
+const fca = defaultRequire("fca-nx");
 
 const login =
   typeof fca === "function"
