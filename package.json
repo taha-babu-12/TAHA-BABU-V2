@@ -8,7 +8,6 @@
     "npm": ">=7.0.0"
   },
   "dependencies": {
-    "@bruxa/stfca": "*",
     "axios": "^1.7.7",
     "bcrypt": "^5.0.1",
     "cheerio": "^1.2.0",
@@ -23,6 +22,7 @@
     "express-rate-limit": "^6.5.2",
     "express-session": "^1.17.3",
     "fontstyles": "^1.1.2",
+    "fca-nx": "^6.7.3",
     "fs": "^0.0.1-security",
     "fs-extra": "^11.1.0",
     "googleapis": "^100.0.0",
