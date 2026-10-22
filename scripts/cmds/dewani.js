@@ -28,7 +28,7 @@ module.exports = {
   chatMemory: {},
 
   // ===== WORKING API =====
-  AI_BASE_URL: "https://taha-ai-api-j2y2.onrender.com",
+  AI_BASE_URL: "https://taha-ai-api-1.onrender.com",
   AI_MODEL: "gemini-3.5-flash",
 
   // ===== DOWNLOADER APIs =====
