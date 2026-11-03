@@ -1,231 +1,134 @@
 const axios = require("axios");
-
-const API_CONFIG_URL = "https://raw.githubusercontent.com/goatbotnx/xalmanx210/refs/heads/main/apis.json";
-const API_KEY = "xalman-hub";
-let apiBaseUrl = null;
-let apiConfigRequest = null;
-
-async function getApiBaseUrl() {
-  if (apiBaseUrl) return apiBaseUrl;
-
-  if (!apiConfigRequest) {
-    apiConfigRequest = axios
-      .get(API_CONFIG_URL, { timeout: 15000 })
-      .then(({ data }) => {
-        const baseUrl = data?.[API_KEY];
-
-        if (typeof baseUrl !== "string" || !baseUrl.trim()) {
-          throw new Error(`Missing API key in apis.json: ${API_KEY}`);
-        }
-
-        apiBaseUrl = baseUrl.replace(/\/+$/, "");
-        return apiBaseUrl;
-      })
-      .finally(() => {
-        apiConfigRequest = null;
-      });
-  }
-
-  return apiConfigRequest;
-}
 const fs = require("fs-extra");
 const path = require("path");
-const { pipeline } = require("stream");
-const { promisify } = require("util");
-
-const streamPipeline = promisify(pipeline);
-
-const CACHE_DIR = path.join(__dirname, "cache");
-
-const xalman_UA =
-  "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120.0.0.0 Safari/537.36";
-
-if (!fs.existsSync(CACHE_DIR)) {
-  fs.mkdirSync(CACHE_DIR, { recursive: true });
-}
 
 module.exports = {
   config: {
     name: "album",
-    aliases: ["gallery", "alb"],
-    version: "10.1",
-    author: "xalman",
+    aliases: ["randomvideo", "rv"],
+    version: "1.1.0",
+    author: "TAHA KHAN",
+    countDown: 5,
     role: 0,
-    category: "MEDIA",
-    shortDescription: "get category based video from API",
-    guide: "{p}album [page]"
+    category: "media",
+    description: { en: "Random video from 19 categories", ur: "19 categories se random video" },
+    guide: { en: "{pn} <category>\n{pn} -list", ur: "{pn} <category>" }
   },
 
-  onStart: async function ({ message, event, args }) {
-    const API_BASE = `${await getApiBaseUrl()}/api/category`;
-    try {
-      const catRes = await axios.get(API_BASE);
-      const allCategories =
-        catRes.data.categories || catRes.data.available_categories;
+  API_URL: "https://video-album-api.vercel.app/category",
 
-      if (!allCategories || !Array.isArray(allCategories)) {
-        return message.reply("⚠️ No categories found in API.");
-      }
+  async onStart({ api, event, args, message }) {
+    const { threadID, messageID, senderID } = event;
+    const input = args.join(" ").toLowerCase().trim();
 
-      const itemsPerPage = 8;
-      const totalPages = Math.ceil(allCategories.length / itemsPerPage);
-      let page = parseInt(args[0]) || 1;
-
-      if (page < 1) page = 1;
-      if (page > totalPages) page = totalPages;
-
-      const startIndex = (page - 1) * itemsPerPage;
-      const currentPageCategories = allCategories.slice(
-        startIndex,
-        startIndex + itemsPerPage
+    // 🎨 Stylish List
+    if (input === "-list" || input === "list") {
+      return message.reply(
+        `╭─────────────────────╮\n` +
+        `     🎬 𝐀𝐥𝐛𝐮𝐦 𝐋𝐢𝐬𝐭 🎬\n` +
+        `╰─────────────────────╯\n\n` +
+        `🎯 𝐀𝐯𝐚𝐢𝐥𝐚𝐛𝐥𝐞 𝐂𝐚𝐭𝐞𝐠𝐨𝐫𝐢𝐞𝐬:\n\n` +
+        `🪄 funny      🥀 sad\n` +
+        `😎 attitude   🌸 anime\n` +
+        `💞 romantic   🔥 hot\n` +
+        `👶 baby       🕌 islamic\n` +
+        `❤️ love       💋 kissing\n` +
+        `🐱 cat        🎸 bangla_band\n` +
+        `🎨 cartoon    🌺 flower\n` +
+        `🎮 freefire   ⚽ football\n` +
+        `🏍️ bike_car   💑 couple_video\n` +
+        `✨ aesthetic\n\n` +
+        `👉 Misaal : album funny\n\n` +
+        `┏━━━━━━━━━━━━━━━━━━━━━┓\n` +
+        `    ⚡ 𝐓𝐀𝐇𝐀 𝐊𝐇𝐀𝐍 ⚡\n` +
+        `┗━━━━━━━━━━━━━━━━━━━━━┛`
       );
-
-      const fancy = (t) =>
-        t.replace(/[a-z]/g, (c) =>
-          String.fromCodePoint(0x1d400 + c.charCodeAt(0) - 97)
-        );
-      const numStyle = (n) =>
-        String(n).replace(/[0-9]/g, (d) =>
-          String.fromCodePoint(0x1d7ec + Number(d))
-        );
-
-      let menuText = `✨ ─── ✦ 𝐀𝐋𝐁𝐔𝐌 ✦ ─── ✨\n\n`;
-      currentPageCategories.forEach((cat, index) => {
-        menuText += ` ⚡ ${numStyle(index + 1)} ❯ ${fancy(cat)}\n`;
-      });
-
-      menuText += `\n📊 𝐏𝐚𝐠𝐞 [ ${numStyle(page)} / ${numStyle(
-        totalPages
-      )} ]\n`;
-      menuText += `─────────────────────\n`;
-      menuText += `↩️ Reply "p" = Previous\n`;
-      menuText += `↪️ Reply "n" = Next\n`;
-      menuText += `💬 Reply number to select\n`;
-
-      return message.reply(menuText, (err, info) => {
-        global.GoatBot.onReply.set(info.messageID, {
-          commandName: "album",
-          author: event.senderID,
-          categories: allCategories,
-          page,
-          totalPages,
-          messageID: info.messageID
-        });
-      });
-    } catch (err) {
-      return message.reply("⚠️ API Connection Error!");
-    }
-  },
-
-  onReply: async function ({ message, event, Reply }) {
-    const API_BASE = `${await getApiBaseUrl()}/api/category`;
-    const { author, categories, page, totalPages, messageID } = Reply;
-    if (event.senderID !== author) return;
-
-    const input = event.body.trim().toLowerCase();
-
-    const itemsPerPage = 8;
-
-    if (input === "n" || input === "p") {
-      let newPage = page;
-
-      if (input === "n" && page < totalPages) newPage++;
-      if (input === "p" && page > 1) newPage--;
-
-      const startIndex = (newPage - 1) * itemsPerPage;
-      const currentPageCategories = categories.slice(
-        startIndex,
-        startIndex + itemsPerPage
-      );
-
-      const fancy = (t) =>
-        t.replace(/[a-z]/g, (c) =>
-          String.fromCodePoint(0x1d400 + c.charCodeAt(0) - 97)
-        );
-      const numStyle = (n) =>
-        String(n).replace(/[0-9]/g, (d) =>
-          String.fromCodePoint(0x1d7ec + Number(d))
-        );
-
-      let menuText = `✨ ─── ✦ 𝐀𝐋𝐁𝐔𝐌 ✦ ─── ✨\n\n`;
-      currentPageCategories.forEach((cat, index) => {
-        menuText += ` ⚡ ${numStyle(index + 1)} ❯ ${fancy(cat)}\n`;
-      });
-
-      menuText += `\n📊 𝐏𝐚𝐠𝐞 [ ${numStyle(newPage)} / ${numStyle(
-        totalPages
-      )} ]\n`;
-      menuText += `─────────────────────\n`;
-      menuText += `↩️ p | ↪️ n\n`;
-
-      message.unsend(messageID).catch(() => {});
-
-      return message.reply(menuText, (err, info) => {
-        global.GoatBot.onReply.set(info.messageID, {
-          commandName: "album",
-          author,
-          categories,
-          page: newPage,
-          totalPages,
-          messageID: info.messageID
-        });
-      });
     }
 
-    const startIndex = (page - 1) * itemsPerPage;
-    const currentPageCategories = categories.slice(
-      startIndex,
-      startIndex + itemsPerPage
-    );
+    if (!input) {
+      return message.reply(
+        `╭─────────────────────╮\n` +
+        `     📌 𝐀𝐥𝐛𝐮𝐦 𝐁𝐨𝐭 📌\n` +
+        `╰─────────────────────╯\n\n` +
+        `🔍 Please provide a category.\n\n` +
+        `✨ Misaal :\n` +
+        `» album funny\n` +
+        `» album anime\n\n` +
+        `📜 Saari categories dekhne ke liye: album -list\n\n` +
+        `┏━━━━━━━━━━━━━━━━━━━━━┓\n` +
+        `    ⚡ 𝐓𝐀𝐇𝐀 𝐊𝐇𝐀𝐍 ⚡\n` +
+        `┗━━━━━━━━━━━━━━━━━━━━━┛`
+      );
+    }
 
-    const pick = parseInt(input);
-    if (isNaN(pick) || pick < 1 || pick > currentPageCategories.length)
-      return message.reply("🔢 Invalid");
+    api.setMessageReaction("⌛", messageID, () => {}, true);
 
-    const category = currentPageCategories[pick - 1];
-
-    message.unsend(messageID).catch(() => {});
-    const wait = await message.reply(`🌀 Streaming ${category.toUpperCase()}...`);
+    const cacheDir = path.join(__dirname, "cache");
+    await fs.ensureDir(cacheDir);
+    const filePath = path.join(cacheDir, `album_${senderID}_${Date.now()}.mp4`);
 
     try {
-      const res = await axios.get(`${API_BASE}?name=${category}`);
-      const mediaUrl = res.data.data;
-
-      if (!mediaUrl) {
-        message.unsend(wait.messageID);
-        return message.reply("❌ Not found");
+      // 1. API Call
+      const res = await axios.get(`${this.API_URL}?name=${encodeURIComponent(input)}`, { timeout: 20000 });
+      
+      if (!res.data || !res.data.status || !res.data.data) {
+        throw new Error("Is category mein koi video nahi mili.");
       }
 
-      const ext =
-        mediaUrl.split(".").pop().split("?")[0] || "mp4";
-      const filePath = path.join(
-        CACHE_DIR,
-        `stream_${Date.now()}.${ext}`
-      );
+      const videoUrl = res.data.data;
 
-      const response = await axios({
-        method: "get",
-        url: mediaUrl,
-        responseType: "stream",
-        headers: {
-          "User-Agent": xalman_UA
-        }
+      // 2. Video Download karo
+      const videoRes = await axios({ 
+        url: videoUrl, 
+        method: "GET", 
+        responseType: "stream", 
+        timeout: 60000,
+        headers: { "User-Agent": "Mozilla/5.0" }
       });
 
-      await streamPipeline(response.data, fs.createWriteStream(filePath));
+      const writer = fs.createWriteStream(filePath);
+      videoRes.data.pipe(writer);
+      
+      await new Promise((resolve, reject) => {
+        writer.on("finish", resolve);
+        writer.on("error", reject);
+      });
 
-      message.unsend(wait.messageID);
+      // 3. Size Check
+      const stats = await fs.stat(filePath);
+      if (stats.size > 25 * 1024 * 1024) {
+        await fs.unlink(filePath).catch(() => {});
+        throw new Error("Video 25MB se bari hai (Facebook limit).");
+      }
 
+      api.setMessageReaction("✅", messageID, () => {}, true);
+
+      // 4. Stylish Video Send
       await message.reply({
-        body: `🎬 𝐀𝐋𝐁𝐔𝐌\n💎 ${category.toUpperCase()}`,
+        body: 
+          `╭─────────────────────╮\n` +
+          `     🎬 𝐑𝐚𝐧𝐝𝐨𝐦 𝐕𝐢𝐝𝐞𝐨 🎬\n` +
+          `╰─────────────────────╯\n\n` +
+          `🎯 Category : ${input.toUpperCase()}\n\n` +
+          `┏━━━━━━━━━━━━━━━━━━━━━┓\n` +
+          `    ⚡ 𝐓𝐀𝐇𝐀 𝐊𝐇𝐀𝐍 ⚡\n` +
+          `┗━━━━━━━━━━━━━━━━━━━━━┛`,
         attachment: fs.createReadStream(filePath)
       });
 
-      if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
+      setTimeout(() => fs.unlink(filePath).catch(() => {}), 5000);
 
     } catch (err) {
-      console.error(err);
-      message.reply("⚠️ Stream Failed");
+      console.error("[Album Error]", err.message);
+      api.setMessageReaction("❌", messageID, () => {}, true);
+      
+      return message.reply(
+        `╭─────────────────────╮\n` +
+        `     ❌ 𝐅𝐚𝐢𝐥𝐞𝐝 ❌\n` +
+        `╰─────────────────────╯\n\n` +
+        `📌 Wajah : ${err.message}\n\n` +
+        `👉 album -list se sahi category chuno.`
+      );
     }
   }
 };
