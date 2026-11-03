@@ -14,8 +14,8 @@ module.exports = {
   },
 
   // 🔥 Naya API URL
-  AI_BASE_URL: "https://taha-ai-api-uav2.onrender.com",
-  BACKUP_AI_BASE_URL: "https://taha-ai-api-64i8.onrender.com", // Purani API backup ke liye
+  AI_BASE_URL: "https://taha-ai-api-j2y2.onrender.com",
+  BACKUP_AI_BASE_URL: "https://taha-ai-api-j2y2.onrender.com", // Purani API backup ke liye
   AI_MODEL: "gemini-3.5-flash",
 
   sendMsg(api, content, threadID, messageID) {
