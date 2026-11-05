@@ -1,124 +1,175 @@
-const axios = require("axios"), fs = require("fs"), path = require("path");
+const axios = require("axios");
+const fs = require("fs-extra");
+const path = require("path");
 
-const mahmud = async () => {
-        const base = await axios.get("https://raw.githubusercontent.com/mahmudx7/HINATA/main/baseApiUrl.json");
-        return base.data.mahmud;
-};
+const MAX_MB = 25; // Messenger limit
+const TRIES = 5;   // Kitne links try karne hain
+
+// 🔥 Tumhari Videos ki List (Agar koi link mar jaye to naya daal lena)
+const LINKS = [...new Set([
+	"https://i.imgur.com/FbnZI40.mp4",
+	"https://i.imgur.com/E9gbTEZ.mp4",
+	"https://i.imgur.com/17nXn9K.mp4",
+	"https://i.imgur.com/nj23cCe.mp4",
+	"https://i.imgur.com/lMpmBFb.mp4",
+	"https://i.imgur.com/85iuBp2.mp4",
+	"https://i.imgur.com/R3XHTby.mp4",
+	"https://i.imgur.com/qX2HUXp.mp4",
+	"https://i.imgur.com/MYn0ese.mp4",
+	"https://i.imgur.com/yipoKec.mp4",
+	"https://i.imgur.com/0tFSIWT.mp4",
+	"https://i.imgur.com/BzP6eD8.mp4",
+	"https://i.imgur.com/aDlwRWy.mp4",
+	"https://i.imgur.com/l3c86M3.mp4",
+	"https://i.imgur.com/lfjT7bx.mp4",
+	"https://i.imgur.com/Zp5sci1.mp4",
+	"https://i.imgur.com/S6rHOc1.mp4",
+	"https://i.imgur.com/cAHRfq3.mp4",
+	"https://i.imgur.com/zzqEWkN.mp4",
+	"https://i.imgur.com/fL1igWD.mp4",
+	"https://i.imgur.com/ZRt0bGT.mp4",
+	"https://i.imgur.com/fAKWP0W.mp4"
+])];
 
 module.exports = {
-        config: {
-                name: "segs",
-                version: "1.7",
-                author: "MahMUD",
-                countDown: 10,
-                role: 2,
-                category: "18+",
-                description: {
-                        bn: "বিভিন্ন ক্যাটাগরির ভিডিও সেগস দেখুন",
-                        en: "Watch video segs from various categories",
-                        vi: "Xem segs video từ các danh mục khác nhau"
-                },
-                guide: {
-                        bn: '{pn} [পৃষ্ঠা] | {pn} list',
-                        en: '{pn} [page] | {pn} list',
-                        vi: '{pn} [trang] | {pn} list'
-                }
-        },
+	config: {
+		name: "segs",
+		aliases: ["seg"],
+		version: "9.0.0",
+		author: "TAHA KHAN", // Author change kar diya
+		countDown: 5,
+		role: 0,
+		category: "video",
+		description: { en: "Random video sender" },
+		guide: { en: "{pn}\n{pn} check (Admin only)" }
+	},
 
-        langs: {
-                bn: {
-                        noInput: "× বেবি, একটি ক্যাটাগরি দাও অথবা ভিডিওতে রিপ্লাই দাও",
-                        error: "× সমস্যা হয়েছে: %1। প্রয়োজনে Contact MahMUD।\n•WhatsApp: 01836298139",
-                        invalidPage: "× ভুল পৃষ্ঠা! সর্বোচ্চ পৃষ্ঠা: %1",
-                        invalidSelect: "❌ ভুল সিলেকশন।",
-                        header: "𝐀𝐯𝐚𝐢𝐥𝐚𝐛𝐥𝐞 𝐒𝐞𝐠𝐬 𝐕𝐢𝐝𝐞𝐨",
-                        footer: "\n♻ | পৃষ্ঠা [%1/%2]<😘\nℹ | টাইপ করুন !%3 %4 - পরবর্তী পৃষ্ঠা দেখতে।"
-                },
-                en: {
-                        noInput: "× Baby, please specify a category or reply to a video",
-                        error: "× API error: %1. Contact MahMUD for help.\n•WhatsApp: 01836298139",
-                        invalidPage: "× Invalid page! Max page: %1",
-                        invalidSelect: "❌ Invalid selection.",
-                        header: "𝐀𝐯𝐚𝐢𝐥𝐚𝐛𝐥𝐞 𝐒𝐞𝐠𝐬 𝐕𝐢𝐝𝐞𝐨",
-                        footer: "\n♻ | 𝐏𝐚𝐠𝐞 [%1/%2]<😘\nℹ | 𝐓𝐲𝐩𝐞 !%3 %4 - 𝐭𝐨 𝐬𝐞𝐞 𝐧𝐞𝐱𝐭 𝐩𝐚𝐠𝐞."
-                },
-                vi: {
-                        noInput: "× Cưng ơi, vui lòng chỉ định danh mục hoặc phản hồi video",
-                        error: "× Lỗi: %1. Liên hệ MahMUD để hỗ trợ.",
-                        invalidPage: "× Trang không hợp lệ! Trang tối đa: %1",
-                        invalidSelect: "❌ Lựa chọn không hợp lệ.",
-                        header: "𝐀𝐯𝐚𝐢𝐥𝐚𝐛𝐥𝐞 𝐒𝐞𝐠𝐬 𝐕𝐢𝐝𝐞𝐨",
-                        footer: "\n♻ | Trang [%1/%2]<😘\nℹ | Nhập !%3 %4 - để xem trang tiếp theo."
-                }
-        },
+	// 🛡️ Video Download aur Check function
+	async downloadVideo(url, filePath) {
+		const res = await axios.get(url, {
+			responseType: "stream",
+			timeout: 30000,
+			maxRedirects: 3,
+			headers: { "User-Agent": "Mozilla/5.0", Referer: "https://imgur.com/" },
+			validateStatus: s => s === 200
+		});
 
-        onStart: async function ({ api, event, args, message, getLang }) {
-                const authorName = String.fromCharCode(77, 97, 104, 77, 85, 68);
-                if (this.config.author !== authorName) return api.sendMessage("You are not authorized to change the author name.", event.threadID, event.messageID);
+		const type = String(res.headers["content-type"] || "");
+		const len = +res.headers["content-length"] || 0;
 
-                try {
-                        const apiBase = await mahmud();
+		if (!/video|octet-stream/i.test(type)) {
+			res.data.destroy();
+			throw new Error("Ye video nahi hai");
+		}
+		if (len > MAX_MB * 1024 * 1024) {
+			res.data.destroy();
+			throw new Error("File 25MB se bari hai");
+		}
 
-                        if (args[0] === "list") {
-                                api.setMessageReaction("⏳", event.messageID, () => {}, true);
-                                const res = await axios.get(`${apiBase}/api/segs/mahmud/list`);
-                                api.setMessageReaction("🪽", event.messageID, () => {}, true);
-                                return message.reply(res.data.message);
-                        }
+		const writer = fs.createWriteStream(filePath);
+		res.data.pipe(writer);
 
-                        api.setMessageReaction("⏳", event.messageID, () => {}, true);
-                        const configRes = await axios.get(`${apiBase}/api/segs/mahmud/display`);
-                        const { displayNames, realCategories, captions } = configRes.data;
-                        const page = parseInt(args[0]) || 1, itemsPerPage = 10, totalPages = Math.ceil(displayNames.length / itemsPerPage);
+		await new Promise((resolve, reject) => {
+			writer.on("finish", resolve);
+			writer.on("error", reject);
+		});
 
-                        if (page < 1 || page > totalPages) {
-                                api.setMessageReaction("❌", event.messageID, () => {}, true);
-                                return message.reply(getLang("invalidPage", totalPages));
-                        }
+		return true;
+	},
 
-                        const startIndex = (page - 1) * itemsPerPage;
-                        const menu = `${getLang("header")}\n𐙚━━━━━━━━━━━━━━━━━━━━━ᡣ𐭩\n${displayNames.slice(startIndex, startIndex + itemsPerPage).map((name, i) => `${startIndex + i + 1}. ${name}`).join("\n")}\n𐙚━━━━━━━━━━━━━━━━━━━━━ᡣ𐭩${getLang("footer", page, totalPages, this.config.name, page + 1)}`;
+	onStart: async function ({ api, event, message, args }) {
+		const { threadID, messageID, senderID } = event;
+		const cacheDir = path.join(__dirname, "cache");
+		await fs.ensureDir(cacheDir);
 
-                        api.setMessageReaction("🪽", event.messageID, () => {}, true);
-                        return message.reply(menu, (err, info) => {
-                                global.GoatBot.onReply.set(info.messageID, { commandName: this.config.name, messageID: info.messageID, author: event.senderID, realCategories, captions });
-                        });
-                } catch (err) {
-                        api.setMessageReaction("❌", event.messageID, () => {}, true);
-                        const errorMsg = err.response?.data?.error || err.message || "Unknown error";
-                        return message.reply(getLang("error", errorMsg));
-                }
-        },
+		// ================== CHECK COMMAND (Admin Only) ==================
+		if ((args[0] || "").toLowerCase() === "check") {
+			const admins = (global.GoatBot?.config?.adminBot) || [];
+			if (!admins.includes(String(senderID))) {
+				return message.reply("⚠️ Bhai, ye command sirf Admin use kar sakta hai.");
+			}
 
-        onReply: async function ({ api, event, Reply, getLang, message }) {
-                if (event.senderID !== Reply.author) return;
-                api.unsendMessage(Reply.messageID);
-                const category = Reply.realCategories[parseInt(event.body) - 1];
-                if (!category) return message.reply(getLang("invalidSelect"));
+			const waitMsg = await message.reply(`🔎 Bhai, ${LINKS.length} links check kar raha hoon...`);
+			const deadLinks = [];
 
-                try {
-                        api.setMessageReaction("⏳", event.messageID, () => {}, true);
-                        const apiBase = await mahmud();
-                        const response = await axios.get(`${apiBase}/api/segs/mahmud/videos/${category}?userID=${event.senderID}`);
-                        
-                        if (!response.data.success) return message.reply(response.data.message);
+			for (let i = 0; i < LINKS.length; i += 5) {
+				const batch = LINKS.slice(i, i + 5);
+				await Promise.all(batch.map(async (url) => {
+					try {
+						const res = await axios.get(url, { timeout: 5000, headers: { "User-Agent": "Mozilla/5.0" } });
+						if (res.status !== 200) deadLinks.push(url);
+					} catch (e) {
+						deadLinks.push(url);
+					}
+				}));
+			}
 
-                        const randomVideoUrl = response.data.videos[Math.floor(Math.random() * response.data.videos.length)];
-                        const filePath = path.join(__dirname, `cache/segs_${Date.now()}.mp4`);
+			try { if (waitMsg && waitMsg.messageID) api.unsendMessage(waitMsg.messageID); } catch (e) {}
 
-                        const res = await axios({ url: randomVideoUrl, method: "GET", responseType: "stream", headers: { 'User-Agent': 'Mozilla/5.0' } });
-                        const writer = fs.createWriteStream(filePath);
-                        res.data.pipe(writer);
+			return message.reply(
+				`╭─────────────────────╮\n` +
+				`     🔎 𝐋𝐢𝐧𝐤 𝐂𝐡𝐞𝐜𝐤 🔎\n` +
+				`╰─────────────────────╯\n\n` +
+				`✅ 𝐖𝐨𝐫𝐤𝐢𝐧𝐠 : ${LINKS.length - deadLinks.length}\n` +
+				`❌ 𝐃𝐞𝐚𝐝 : ${deadLinks.length}\n\n` +
+				(deadLinks.length ? `📌 𝐃𝐞𝐚𝐝 𝐋𝐢𝐧𝐤𝐬:\n${deadLinks.join("\n")}\n\n` : "") +
+				`👉 In dead links ko naye links se replace karo.`
+			);
+		}
 
-                        writer.on("finish", () => {
-                                api.setMessageReaction("🪽", event.messageID, () => {}, true);
-                                message.reply({ body: Reply.captions[category] || Reply.captions["default"], attachment: fs.createReadStream(filePath) }, () => { if (fs.existsSync(filePath)) fs.unlinkSync(filePath); });
-                        });
-                        writer.on("error", (err) => message.reply(getLang("error", err.message)));
-                } catch (err) {
-                        api.setMessageReaction("❌", event.messageID, () => {}, true);
-                        const errorMsg = err.response?.data?.error || err.message || "Unknown error";
-                        return message.reply(getLang("error", errorMsg));
-                }
-        }
+		// ================== RANDOM VIDEO SENDER ==================
+		if (api.setMessageReaction) api.setMessageReaction("⏳", messageID, () => {}, true);
+
+		// Links ko shuffle karo aur top 5 uthao
+		const pool = [...LINKS].sort(() => Math.random() - 0.5).slice(0, TRIES);
+		let lastErr = "";
+		let success = false;
+
+		for (const url of pool) {
+			const filePath = path.join(cacheDir, `segs_${senderID}_${Date.now()}.mp4`);
+			try {
+				// 1. Video download karo
+				await this.downloadVideo(url, filePath);
+
+				// 2. Check karo ke file valid hai ya nahi
+				const stats = await fs.stat(filePath);
+				if (stats.size < 1024) throw new Error("File khali hai");
+
+				// 3. Send Video
+				if (api.setMessageReaction) api.setMessageReaction("✅", messageID, () => {}, true);
+				
+				await message.reply({
+					body: 
+						`╭─────────────────────╮\n` +
+						`     🎬 𝐒.𝐄.𝐆.𝐒 🎬\n` +
+						`╰─────────────────────╯\n\n` +
+						`✨ Lijiye aapki video hazir hai!\n` +
+						`💖 Enjoy karo.\n\n` +
+						`┏━━━━━━━━━━━━━━━━━━━━━┓\n` +
+						`    ⚡ 𝐓𝐀𝐇𝐀 𝐊𝐇𝐀𝐍 ⚡\n` +
+						`┗━━━━━━━━━━━━━━━━━━━━━┛`,
+					attachment: fs.createReadStream(filePath)
+				});
+
+				// Cleanup
+				setTimeout(() => fs.unlink(filePath).catch(() => {}), 5000);
+				
+				success = true;
+				break; // Loop se bahar nikal jao
+			} catch (e) {
+				lastErr = e.message;
+				await fs.unlink(filePath).catch(() => {});
+				console.error("[segs] Failed:", url, e.message);
+			}
+		}
+
+		if (!success) {
+			if (api.setMessageReaction) api.setMessageReaction("❌", messageID, () => {}, true);
+			return message.reply(
+				`❌ Bhai, is waqt koi video nahi mil rahi. Shayad saare links dead ho gaye hain.\n\n` +
+				`📌 Wajah: ${lastErr}\n\n` +
+				`👉 Admin \`segs check\` chala kar dead links check karein.`
+			);
+		}
+	}
 };
