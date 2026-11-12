@@ -6,7 +6,7 @@ const path = require("path");
 module.exports = {
   config: {
     name: "sing",
-    aliases: ["song", "play"],
+    aliases: ["song"],
     version: "2.0.0",
     author: "Taha Khan",
     countDown: 5,
