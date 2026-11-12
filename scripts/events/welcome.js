@@ -1,230 +1,342 @@
+
+'use strict';
+
 const { getTime } = global.utils;
-const axios = require("axios");
-const fs = require("fs-extra");
-const path = require("path");
+const axios = require('axios');
+const fs = require('fs-extra');
+const path = require('path');
 const { createCanvas, loadImage } = require('canvas');
 
-if (!global.temp.welcomeEvent)
-    global.temp.welcomeEvent = {};
+if (!global.temp.welcomeEvent) global.temp.welcomeEvent = {};
 
-// 🌌 Background Image URL (Agar aapke paas koi aur galaxy ki pic hai to yahan change kar lena)
-const GALAXY_BG = "https://images.unsplash.com/photo-1462331940025-496dfbfc7564?q=80&w=2048&auto=format&fit=crop";
+const GALAXY_BG = 'https://images.unsplash.com/photo-1462331940025-496dfbfc7564?q=80&w=2048&auto=format&fit=crop';
+const PURPLE = '#a855f7';
 
-async function createWelcomeCard(userImg, botImg, userName, userNumber, threadName) {
+async function loadRemoteImage(url) {
+    if (!url) return null;
+    try {
+        const response = await axios.get(url, {
+            responseType: 'arraybuffer',
+            timeout: 12000,
+            maxContentLength: 8 * 1024 * 1024
+        });
+        return await loadImage(Buffer.from(response.data));
+    } catch (error) {
+        console.log('[WELCOME] Image load failed:', error.message);
+        return null;
+    }
+}
+
+function fitText(ctx, text, maxWidth, startSize, minSize = 18) {
+    let size = startSize;
+    while (size > minSize) {
+        ctx.font = `900 ${size}px Arial`;
+        if (ctx.measureText(text).width <= maxWidth) break;
+        size -= 2;
+    }
+    return size;
+}
+
+function drawCover(ctx, image, x, y, width, height) {
+    const scale = Math.max(width / image.width, height / image.height);
+    const sw = width / scale;
+    const sh = height / scale;
+    const sx = (image.width - sw) / 2;
+    const sy = (image.height - sh) / 2;
+    ctx.drawImage(image, sx, sy, sw, sh, x, y, width, height);
+}
+
+function drawCircleAvatar(ctx, image, x, y, radius, fallbackText) {
+    ctx.save();
+    ctx.shadowColor = PURPLE;
+    ctx.shadowBlur = 28;
+    ctx.beginPath();
+    ctx.arc(x, y, radius + 9, 0, Math.PI * 2);
+    ctx.fillStyle = '#090511';
+    ctx.fill();
+    ctx.restore();
+
+    ctx.beginPath();
+    ctx.arc(x, y, radius + 5, 0, Math.PI * 2);
+    ctx.strokeStyle = '#c084fc';
+    ctx.lineWidth = 5;
+    ctx.stroke();
+
+    ctx.save();
+    ctx.beginPath();
+    ctx.arc(x, y, radius, 0, Math.PI * 2);
+    ctx.clip();
+
+    if (image) {
+        drawCover(ctx, image, x - radius, y - radius, radius * 2, radius * 2);
+    } else {
+        ctx.fillStyle = '#211333';
+        ctx.fillRect(x - radius, y - radius, radius * 2, radius * 2);
+        ctx.fillStyle = '#ffffff';
+        ctx.font = 'bold 24px Arial';
+        ctx.textAlign = 'center';
+        ctx.fillText(fallbackText, x, y + 8);
+    }
+    ctx.restore();
+}
+
+async function createWelcomeCard(userImg, botImg, userName, memberNumber, threadName) {
     const width = 1024;
     const height = 450;
     const canvas = createCanvas(width, height);
     const ctx = canvas.getContext('2d');
 
-    // 1. Galaxy Background Load karo
-    try {
-        const bgRes = await axios.get(GALAXY_BG, { responseType: 'arraybuffer' });
-        const bgImg = await loadImage(Buffer.from(bgRes.data));
-        ctx.drawImage(bgImg, 0, 0, width, height);
-    } catch (e) {
-        ctx.fillStyle = "#0a0a10";
+    // GALAXY BACKGROUND
+    const bg = await loadRemoteImage(GALAXY_BG);
+
+    if (bg) {
+        drawCover(ctx, bg, 0, 0, width, height);
+    } else {
+        const gradient = ctx.createLinearGradient(0, 0, width, height);
+        gradient.addColorStop(0, '#090516');
+        gradient.addColorStop(0.55, '#241044');
+        gradient.addColorStop(1, '#05030b');
+        ctx.fillStyle = gradient;
         ctx.fillRect(0, 0, width, height);
     }
 
-    // 2. Right side ka Dark Angled Panel
-    ctx.fillStyle = "#18181b"; // Dark Charcoal
-    ctx.beginPath();
-    ctx.moveTo(width * 0.45, 0);      // Top point (angled)
-    ctx.lineTo(width, 0);             // Top right
-    ctx.lineTo(width, height);        // Bottom right
-    ctx.lineTo(width * 0.25, height); // Bottom point (angled)
-    ctx.closePath();
-    ctx.fill();
+    // DARK OVERLAY
+    ctx.fillStyle = 'rgba(5, 3, 14, 0.48)';
+    ctx.fillRect(0, 0, width, height);
 
-    // Ek halki si border line taake panel alag lage
-    ctx.strokeStyle = "#333";
-    ctx.lineWidth = 2;
-    ctx.beginPath();
-    ctx.moveTo(width * 0.45, 0);
-    ctx.lineTo(width * 0.25, height);
-    ctx.stroke();
-
-    // 3. Left side Name Badge (Polygon)
-    ctx.fillStyle = "#18181b";
-    ctx.beginPath();
-    ctx.moveTo(0, height - 90);
-    ctx.lineTo(width * 0.3, height - 90);
-    ctx.lineTo(width * 0.35, height);
-    ctx.lineTo(0, height);
-    ctx.closePath();
-    ctx.fill();
-
-    // Badge ki white outline
-    ctx.strokeStyle = "#555";
-    ctx.lineWidth = 2;
-    ctx.beginPath();
-    ctx.moveTo(0, height - 90);
-    ctx.lineTo(width * 0.3, height - 90);
-    ctx.lineTo(width * 0.35, height);
-    ctx.stroke();
-
-    // 4. Left Avatar (User) Draw karo
-    try {
-        const res = await axios.get(userImg, { responseType: 'arraybuffer' });
-        const img = await loadImage(Buffer.from(res.data));
-        
-        const cx = 180;
-        const cy = 160;
-        const r = 110;
-
-        // Black Border
-        ctx.beginPath();
-        ctx.arc(cx, cy, r + 8, 0, Math.PI * 2);
-        ctx.fillStyle = "#000";
-        ctx.fill();
-
-        // Inner Grey Border
-        ctx.beginPath();
-        ctx.arc(cx, cy, r + 4, 0, Math.PI * 2);
-        ctx.fillStyle = "#333";
-        ctx.fill();
-
-        // Avatar Clip
-        ctx.save();
-        ctx.beginPath();
-        ctx.arc(cx, cy, r, 0, Math.PI * 2);
-        ctx.clip();
-        ctx.drawImage(img, cx - r, cy - r, r * 2, r * 2);
-        ctx.restore();
-    } catch (e) { console.log("User Avatar error"); }
-
-    // 5. Right Avatar (Bot/Group) Draw karo
-    try {
-        const res = await axios.get(botImg, { responseType: 'arraybuffer' });
-        const img = await loadImage(Buffer.from(res.data));
-        
-        const cx = 850;
-        const cy = 310;
-        const r = 70;
-
-        // Black Border
-        ctx.beginPath();
-        ctx.arc(cx, cy, r + 6, 0, Math.PI * 2);
-        ctx.fillStyle = "#000";
-        ctx.fill();
-
-        // Inner Border
-        ctx.beginPath();
-        ctx.arc(cx, cy, r + 2, 0, Math.PI * 2);
-        ctx.fillStyle = "#333";
-        ctx.fill();
-
-        // Avatar Clip
-        ctx.save();
-        ctx.beginPath();
-        ctx.arc(cx, cy, r, 0, Math.PI * 2);
-        ctx.clip();
-        ctx.drawImage(img, cx - r, cy - r, r * 2, r * 2);
-        ctx.restore();
-    } catch (e) { console.log("Bot Avatar error"); }
-
-    // 6. Text: WELCOME TO (Angled)
+    // RIGHT ANGLED PANEL
     ctx.save();
-    ctx.translate(750, 180); // Position
-    ctx.rotate(35 * Math.PI / 180); // Angle (35 degrees)
-    ctx.font = 'bold 55px "Arial Black", Arial, sans-serif';
-    ctx.fillStyle = '#ffffff';
-    ctx.textAlign = 'center';
-    ctx.fillText("WELCOME TO", 0, 0);
+    ctx.beginPath();
+    ctx.moveTo(490, 0);
+    ctx.lineTo(1024, 0);
+    ctx.lineTo(1024, 450);
+    ctx.lineTo(330, 450);
+    ctx.closePath();
+
+    ctx.fillStyle = 'rgba(7, 6, 15, 0.91)';
+    ctx.fill();
+
+    ctx.strokeStyle = PURPLE;
+    ctx.lineWidth = 5;
+    ctx.shadowColor = PURPLE;
+    ctx.shadowBlur = 16;
+
+    ctx.beginPath();
+    ctx.moveTo(490, 0);
+    ctx.lineTo(330, 450);
+    ctx.stroke();
     ctx.restore();
 
-    // 7. Text: GROUP NAME (Right Side)
-    ctx.font = 'bold 50px "Arial Black", Arial, sans-serif';
-    ctx.fillStyle = '#ffffff';
+    // USER AVATAR
+    const userImage = await loadRemoteImage(userImg);
+    drawCircleAvatar(ctx, userImage, 190, 190, 112, 'USER');
+
+    // BOT AVATAR
+    const botImage = await loadRemoteImage(botImg);
+    drawCircleAvatar(ctx, botImage, 790, 285, 82, 'BOT');
+
+    // WELCOME HEADING
+    ctx.save();
+    ctx.translate(760, 145);
+    ctx.rotate(-0.10);
     ctx.textAlign = 'center';
-    
-    // Agar naam bohot lamba hai to kaat do
-    let gName = threadName.toUpperCase();
-    if (gName.length > 15) gName = gName.substring(0, 14) + "...";
-    ctx.fillText(gName, 810, 420);
+    ctx.font = '900 65px Arial';
+    ctx.lineWidth = 8;
+    ctx.strokeStyle = '#09060f';
+    ctx.strokeText('WELCOME TO', 0, 0);
 
-    // 8. Text: USER NAME (Left Side)
-    ctx.font = 'bold 55px "Arial Black", Arial, sans-serif';
     ctx.fillStyle = '#ffffff';
-    ctx.textAlign = 'left';
-    
-    let uName = userName.toUpperCase();
-    if (uName.length > 12) uName = uName.substring(0, 11) + "...";
-    ctx.fillText(uName, 30, height - 110);
+    ctx.shadowColor = PURPLE;
+    ctx.shadowBlur = 18;
+    ctx.fillText('WELCOME TO', 0, 0);
+    ctx.restore();
 
-    // 9. Text: MEMBER COUNT (Left Side)
-    ctx.font = 'bold 22px "Arial", sans-serif';
+    // PURPLE UNDERLINE
+    ctx.save();
+    ctx.strokeStyle = '#a855f7';
+    ctx.lineWidth = 8;
+    ctx.shadowColor = PURPLE;
+    ctx.shadowBlur = 18;
+    ctx.beginPath();
+    ctx.moveTo(535, 185);
+    ctx.quadraticCurveTo(760, 215, 970, 170);
+    ctx.stroke();
+    ctx.restore();
+
+    // GROUP NAME
+    let groupLabel = String(threadName || 'GROUP').toUpperCase();
+
+    ctx.textAlign = 'center';
+    const groupSize = fitText(ctx, groupLabel, 590, 49, 24);
+    ctx.font = `900 ${groupSize}px Arial`;
+    ctx.lineWidth = 5;
+    ctx.strokeStyle = '#08050d';
+    ctx.strokeText(groupLabel, 730, 420);
+
     ctx.fillStyle = '#ffffff';
-    ctx.fillText(`- ${userNumber}TH MEMBER !`, 30, height - 40);
+    ctx.shadowColor = PURPLE;
+    ctx.shadowBlur = 14;
+    ctx.fillText(groupLabel, 730, 420);
 
-    return canvas.toBuffer();
+    // USER NAME BANNER
+    ctx.save();
+    ctx.beginPath();
+    ctx.moveTo(0, 335);
+    ctx.lineTo(380, 335);
+    ctx.lineTo(420, 450);
+    ctx.lineTo(0, 450);
+    ctx.closePath();
+
+    ctx.fillStyle = 'rgba(4, 3, 10, 0.94)';
+    ctx.fill();
+
+    ctx.strokeStyle = '#c084fc';
+    ctx.lineWidth = 3;
+    ctx.stroke();
+    ctx.restore();
+
+    // USER NAME
+    let displayName = String(userName || 'NEW MEMBER').toUpperCase();
+
+    const nameSize = fitText(ctx, displayName, 370, 47, 22);
+    ctx.textAlign = 'center';
+    ctx.font = `900 ${nameSize}px Arial`;
+    ctx.lineWidth = 5;
+    ctx.strokeStyle = '#08050d';
+    ctx.strokeText(displayName, 195, 395);
+
+    ctx.fillStyle = '#ffffff';
+    ctx.fillText(displayName, 195, 395);
+
+    // MEMBER COUNT
+    ctx.font = 'bold 25px Arial';
+    ctx.fillStyle = '#e9d5ff';
+    ctx.fillText(`★  ${memberNumber}TH MEMBER  ★`, 205, 435);
+
+    // TAHA MD BRANDING
+    ctx.textAlign = 'center';
+    ctx.font = 'bold 21px Arial';
+    ctx.fillStyle = '#c084fc';
+    ctx.fillText('TAHA MD', 790, 385);
+
+    return canvas.toBuffer('image/png');
 }
 
 module.exports = {
     config: {
-        name: "welcome",
-        version: "5.0.0",
-        author: "xalman",
-        category: "events"
+        name: 'welcome',
+        version: '6.0.0',
+        author: 'xalman',
+        category: 'events'
     },
+
     langs: {
         en: {
-            session1: "morning", session2: "noon", session3: "afternoon", session4: "evening",
-            welcomeMessage: "『 ᴛʜᴀɴᴋ ʏᴏᴜ ꜰᴏʀ ᴀᴅᴅɪɴɢ ᴍᴇ! 』",
-            defaultWelcomeMessage: "『 ᴡᴇʟᴄᴏᴍᴇ ᴛᴏ ᴛʜᴇ ᴄʟᴀɴ 』\n━━━━━━━━━━━━━━━━━━\n👋 ʜᴇʟʟᴏ, {userNameTag}!\n🏘️ ᴡᴇʟᴄᴏᴍᴇ ᴛᴏ: {boxName}\n🕒 ʜᴀᴠᴇ ᴀ ɢᴏᴏᴅ {session}"
+            welcomeMessage: '『 ᴛʜᴀɴᴋ ʏᴏᴜ ꜰᴏʀ ᴀᴅᴅɪɴɢ ᴍᴇ! 』',
+
+            defaultWelcomeMessage:
+                '『 ᴡᴇʟᴄᴏᴍᴇ ᴛᴏ ᴛʜᴇ ɢʀᴏᴜᴘ 』\n' +
+                '━━━━━━━━━━━━━━━━━━\n' +
+                '👋 ʜᴇʟʟᴏ, {userNameTag}!\n' +
+                '🏘️ ᴡᴇʟᴄᴏᴍᴇ ᴛᴏ: {boxName}\n' +
+                '🕒 ʜᴀᴠᴇ ᴀ ɢᴏᴏᴅ {session}'
         }
     },
 
     onStart: async ({ threadsData, message, event, api, getLang, usersData }) => {
-        if (event.logMessageType !== "log:subscribe") return;
 
-        const hours = getTime("HH");
+        if (event.logMessageType !== 'log:subscribe') return;
+
         const { threadID } = event;
         const prefix = global.utils.getPrefix(threadID);
-        const dataAddedParticipants = event.logMessageData.addedParticipants;
+        const addedParticipants = event.logMessageData.addedParticipants || [];
+        const botID = api.getCurrentUserID();
 
-        // Agar bot ko add kiya gaya
-        if (dataAddedParticipants.some((item) => item.userFbId == api.getCurrentUserID())) {
-            if (global.GoatBot.config.nickNameBot)
-                api.changeNickname(global.GoatBot.config.nickNameBot, threadID, api.getCurrentUserID());
-            return message.send(getLang("welcomeMessage", prefix));
-        }
-
-        if (!global.temp.welcomeEvent[threadID])
-            global.temp.welcomeEvent[threadID] = { joinTimeout: null, dataAddedParticipants: [] };
-
-        global.temp.welcomeEvent[threadID].dataAddedParticipants.push(...dataAddedParticipants);
-        clearTimeout(global.temp.welcomeEvent[threadID].joinTimeout);
-
-        global.temp.welcomeEvent[threadID].joinTimeout = setTimeout(async function () {
-            const threadData = await threadsData.get(threadID);
-            if (threadData.settings.sendWelcomeMessage == false) return;
-
-            const addedParticipants = global.temp.welcomeEvent[threadID].dataAddedParticipants;
-            const threadName = threadData.threadName || "GROUP";
-            let userName = [], mentions = [];
-
-            for (const user of addedParticipants) {
-                userName.push(user.fullName);
-                mentions.push({ tag: user.fullName, id: user.userFbId });
+        // BOT ADDED TO GROUP
+        if (addedParticipants.some(item => String(item.userFbId) === String(botID))) {
+            if (global.GoatBot.config.nickNameBot) {
+                api.changeNickname(
+                    global.GoatBot.config.nickNameBot,
+                    threadID,
+                    botID
+                );
             }
 
-            if (userName.length == 0) return;
+            return message.send(getLang('welcomeMessage', prefix));
+        }
 
-            let { welcomeMessage = getLang("defaultWelcomeMessage") } = threadData.data;
-            welcomeMessage = welcomeMessage
-                .replace(/\{userNameTag\}|\{userName\}/g, userName.join(", "))
-                .replace(/\{boxName\}|\{threadName\}/g, threadName);
+        if (!global.temp.welcomeEvent[threadID]) {
+            global.temp.welcomeEvent[threadID] = {
+                joinTimeout: null,
+                dataAddedParticipants: []
+            };
+        }
 
+        const state = global.temp.welcomeEvent[threadID];
+
+        state.dataAddedParticipants.push(...addedParticipants);
+        clearTimeout(state.joinTimeout);
+
+        state.joinTimeout = setTimeout(async () => {
             try {
-                const firstUser = addedParticipants[0];
-                
-                // Avatars fetch karo
-                let userAvatar = await usersData.getAvatarUrl(firstUser.userFbId);
-                let botAvatar = `https://graph.facebook.com/${api.getCurrentUserID()}/picture?width=512&height=512&access_token=6628568379%7Cc1e620fa708a1d5696fb991c1bde5662`;
-                let memberCount = threadData.members?.length || 1;
+                const threadData = await threadsData.get(threadID);
 
-                // 🔥 Image Generate karo
+                if (threadData.settings?.sendWelcomeMessage === false) {
+                    delete global.temp.welcomeEvent[threadID];
+                    return;
+                }
+
+                const joined = state.dataAddedParticipants;
+
+                if (!joined.length) {
+                    delete global.temp.welcomeEvent[threadID];
+                    return;
+                }
+
+                const threadName = threadData.threadName || 'GROUP';
+
+                const names = joined.map(user => user.fullName || 'New member');
+
+                const mentions = joined.map(user => ({
+                    tag: user.fullName || 'New member',
+                    id: user.userFbId
+                }));
+
+                let {
+                    welcomeMessage = getLang('defaultWelcomeMessage')
+                } = threadData.data || {};
+
+                const hour = Number(getTime('HH'));
+
+                const session = hour < 12
+                    ? 'morning'
+                    : hour < 17
+                        ? 'afternoon'
+                        : 'evening';
+
+                welcomeMessage = welcomeMessage
+                    .replace(/\{userNameTag\}|\{userName\}/g, names.join(', '))
+                    .replace(/\{boxName\}|\{threadName\}/g, threadName)
+                    .replace(/\{session\}/g, session);
+
+                const firstUser = joined[0];
+
+                // USER PROFILE
+                const userAvatar = await usersData.getAvatarUrl(firstUser.userFbId);
+
+                // BOT PROFILE
+                let botAvatar = null;
+
+                try {
+                    botAvatar = await usersData.getAvatarUrl(botID);
+                } catch (error) {
+                    console.log('[WELCOME] Bot avatar unavailable');
+                }
+
+                // MEMBER COUNT
+                const memberCount = threadData.members?.length || 1;
+
+                // CREATE WELCOME IMAGE
                 const imageBuffer = await createWelcomeCard(
                     userAvatar,
                     botAvatar,
@@ -233,25 +345,36 @@ module.exports = {
                     threadName
                 );
 
-                const tempDir = path.join(__dirname, 'cache');
-                await fs.ensureDir(tempDir);
-                const tempPath = path.join(tempDir, `welcome_${Date.now()}.png`);
-                fs.writeFileSync(tempPath, imageBuffer);
+                // SAVE IMAGE
+                const cacheDir = path.join(__dirname, 'cache');
 
+                await fs.ensureDir(cacheDir);
+
+                const tempPath = path.join(
+                    cacheDir,
+                    `welcome_${Date.now()}.png`
+                );
+
+                await fs.writeFile(tempPath, imageBuffer);
+
+                // SEND WELCOME MESSAGE
                 await message.send({
                     body: welcomeMessage,
                     attachment: fs.createReadStream(tempPath),
                     mentions: mentions
                 });
 
-                setTimeout(() => { if (fs.existsSync(tempPath)) fs.unlinkSync(tempPath); }, 10000);
+                // DELETE TEMP IMAGE
+                setTimeout(() => {
+                    fs.remove(tempPath).catch(() => {});
+                }, 15000);
 
             } catch (error) {
-                console.error("[WELCOME] Card creation error:", error);
-                await message.send({ body: welcomeMessage, mentions: mentions });
+                console.error('[WELCOME] Error:', error);
+            } finally {
+                delete global.temp.welcomeEvent[threadID];
             }
 
-            delete global.temp.welcomeEvent[threadID];
-        }, 400);
+        }, 500);
     }
 };
