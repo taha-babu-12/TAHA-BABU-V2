@@ -17,7 +17,7 @@ const log = require("./logger/log.js");
 const ROOT = __dirname;
 const PORT = process.env.PORT || 3000;
 // ===== DASHBOARD PASSWORD (change it here) =====
-const PANEL_PASSWORD = "xalmanx210";
+const PANEL_PASSWORD = "tahakhan786";
 const HOT_FILE = ".dashboard-hot.js";
 const LOG_LIMIT = 1500;
 const MAX_FILE_SIZE = 2 * 1024 * 1024;
@@ -886,7 +886,7 @@ const PAGE = String.raw`<!DOCTYPE html>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#0a0e1a">
-<title>NX GoatBot - Control Panel</title>
+<title>TAHA GoatBot - Control Panel</title>
 <style>
 :root{
   --bg:#0a0e1a; --bg2:#0f1426; --card:rgba(255,255,255,.045); --card2:rgba(255,255,255,.07);
