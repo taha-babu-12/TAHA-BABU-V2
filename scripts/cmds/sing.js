@@ -1,18 +1,19 @@
 const axios = require("axios");
+const yts = require("yt-search");
 const fs = require("fs-extra");
 const path = require("path");
 
 module.exports = {
   config: {
     name: "sing",
-    aliases: [],
-    version: "1.0.1",
+    aliases: ["song", "play"],
+    version: "2.0.0",
     author: "Taha Khan",
     countDown: 5,
     role: 0,
     description: {
-      en: "Search Apple Music songs via Nexray API",
-      ur: "Apple Music se gaane search karein"
+      en: "Search Apple Music and download the song audio",
+      ur: "Apple Music se gaana search karke download karein"
     },
     category: "media",
     guide: {
@@ -21,105 +22,143 @@ module.exports = {
     }
   },
 
+  API_YT: "https://yt-mian-amir.vercel.app/api/link",
+  MAX_SIZE: 25 * 1024 * 1024, // 25MB Facebook limit
+
   async onStart({ api, event, args }) {
-    const { threadID, messageID } = event;
+    const { threadID, messageID, senderID } = event;
     const query = args.join(" ");
 
     if (!query) {
       return api.sendMessage(
-        "❌ **Aapne gaane ka naam nahi likha!**\n\n💡 *Example:* `.sing Waja tum`",
+        `╭─────────────────────╮\n` +
+        `     🎵 𝐒𝐢𝐧𝐠 𝐁𝐨𝐭 🎵\n` +
+        `╰─────────────────────╯\n\n` +
+        `📌 Bhai, gaane ka naam likho!\n` +
+        `✨ Misaal: \`sing Waja Tum Ho\`\n\n` +
+        `┏━━━━━━━━━━━━━━━━━━━━━┓\n` +
+        `    ⚡ 𝐓𝐀𝐇𝐀 𝐊𝐇𝐀𝐍 ⚡\n` +
+        `┗━━━━━━━━━━━━━━━━━━━━━┛`,
         threadID,
         messageID
       );
     }
 
     if (api.setMessageReaction) api.setMessageReaction("⌛", messageID, () => {}, true);
+    await api.sendMessage(`🔎 Bhai, "${query}" dhoondh raha hoon...`, threadID, messageID);
 
     const cacheDir = path.join(__dirname, "cache");
     await fs.ensureDir(cacheDir);
-    const imagePath = path.join(cacheDir, `sing_${Date.now()}.jpg`);
+    const imagePath = path.join(cacheDir, `sing_img_${Date.now()}.jpg`);
+    const audioPath = path.join(cacheDir, `sing_audio_${Date.now()}.mp3`);
 
     try {
-      // Fetch Apple Music Results via Nexray API
-      const res = await axios.get(`https://api.nexray.eu.cc/search/applemusic?q=${encodeURIComponent(query)}`, {
-        headers: {
-          "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
-        },
-        timeout: 15000
-      });
+      // 1. Apple Music Search (Title aur Cover ke liye)
+      let songTitle = query;
+      let artistName = "Unknown";
+      let appleMusicImage = null;
 
-      const results = res.data?.result;
-
-      if (!results || !Array.isArray(results) || results.length === 0) {
-        if (api.setMessageReaction) api.setMessageReaction("❌", messageID, () => {}, true);
-        return api.sendMessage("❌ Is naam ka koi gaana nahi mila!", threadID, messageID);
+      try {
+        const res = await axios.get(`https://api.nexray.eu.cc/search/applemusic?q=${encodeURIComponent(query)}`, { timeout: 10000 });
+        if (res.data?.result?.length > 0) {
+          const topResult = res.data.result[0];
+          songTitle = topResult.title;
+          artistName = topResult.subtitle;
+          if (topResult.image) {
+            appleMusicImage = topResult.image.replace("110x110bb-60.jpg", "600x600bb.jpg");
+          }
+        }
+      } catch (e) {
+        console.log("[Sing] Apple Music API fail, using YouTube search only.");
       }
 
-      const topResults = results.slice(0, 5);
-      const numBadges = ["❶", "❷", "❸", "❹", "❺"];
+      // 2. YouTube par search karo (Audio ke liye)
+      const ytSearchQuery = `${songTitle} ${artistName}`;
+      const search = await yts(ytSearchQuery);
+      if (!search.videos || !search.videos[0]) throw new Error("YouTube par gaana nahi mila.");
+      
+      const video = search.videos[0];
 
-      // Bold & Mota Stylized Search Layout
-      let msg = `╭━━━〔 𝗠𝗨𝗦𝗜𝗖 𝗦𝗘𝗔𝗥𝗖𝗛 〕━━━╮\n\n`;
+      // 3. YouTube Audio API se MP3 link lo
+      const ytApiUrl = `${this.API_YT}?url=${encodeURIComponent(video.url)}&format=mp3`;
+      const ytRes = await axios.get(ytApiUrl, { timeout: 30000 });
+      const audioUrl = ytRes.data?.download_url || ytRes.data?.upstream_url;
 
-      topResults.forEach((item, index) => {
-        msg += `${numBadges[index]} 𝗧𝗶𝘁𝗹𝗲: ${item.title}\n` +
-               `🎤 𝗜𝗻𝗳𝗼: ${item.subtitle}\n` +
-               `🔗 𝗟𝗶𝗻𝗸: ${item.link}\n` +
-               `───────────────────────\n`;
+      if (!audioUrl) throw new Error("Audio link nahi mila.");
+
+      // 4. Audio Download karo
+      const audioRes = await axios({ url: audioUrl, method: "GET", responseType: "stream", timeout: 60000 });
+      const writer = fs.createWriteStream(audioPath);
+      audioRes.data.pipe(writer);
+
+      await new Promise((resolve, reject) => {
+        writer.on("finish", resolve);
+        writer.on("error", reject);
       });
 
-      msg += `\n👑 𝗢𝗪𝗡𝗘𝗥: 𝗧𝗔𝗛𝗔 𝗞𝗛𝗔𝗡\n` +
-             `╰━━━━━━━━━━━━━━━━━━━━━╯`;
+      const stats = await fs.stat(audioPath);
+      if (stats.size > this.MAX_SIZE) {
+        await fs.unlink(audioPath).catch(() => {});
+        throw new Error("Gaana 25MB se bara hai (Facebook limit).");
+      }
 
-      // Download HD Cover Image of the Top Match
+      // 5. Cover Image Download karo
       let attachment = [];
-      const topImage = topResults[0]?.image;
-
-      if (topImage) {
+      const finalImage = appleMusicImage || video.thumbnail;
+      
+      if (finalImage) {
         try {
-          const hdImageUrl = topImage.replace("110x110bb-60.jpg", "600x600bb.jpg");
-
-          const imgRes = await axios({
-            method: "get",
-            url: hdImageUrl,
-            responseType: "stream"
+          const imgRes = await axios({ url: finalImage, method: "GET", responseType: "stream", timeout: 15000 });
+          const imgWriter = fs.createWriteStream(imagePath);
+          imgRes.data.pipe(imgWriter);
+          await new Promise((res, rej) => {
+            imgWriter.on("finish", res);
+            imgWriter.on("error", rej);
           });
-
-          const writer = fs.createWriteStream(imagePath);
-          imgRes.data.pipe(writer);
-
-          await new Promise((resolve, reject) => {
-            writer.on("finish", resolve);
-            writer.on("error", reject);
-          });
-
-          if (fs.existsSync(imagePath)) {
-            attachment.push(fs.createReadStream(imagePath));
-          }
+          if (fs.existsSync(imagePath)) attachment.push(fs.createReadStream(imagePath));
         } catch (e) {
-          console.error("[SING IMAGE ERROR]:", e.message);
+          console.log("[Sing] Image download fail.");
         }
       }
 
+      // 6. Send Photo + Caption
       if (api.setMessageReaction) api.setMessageReaction("✅", messageID, () => {}, true);
 
-      await api.sendMessage(
-        {
-          body: msg,
-          attachment: attachment
-        },
-        threadID,
-        messageID
-      );
+      const msgBody = 
+        `╭─────────────────────╮\n` +
+        `     ✨ 𝐒𝐢𝐧𝐠 ✨\n` +
+        `╰─────────────────────╯\n\n` +
+        `📝 Title : ${songTitle}\n` +
+        `👤 Artist : ${artistName}\n` +
+        `⏱ Duration : ${video.timestamp}\n\n` +
+        `┏━━━━━━━━━━━━━━━━━━━━━┓\n` +
+        `    ⚡ 𝐓𝐀𝐇𝐀 𝐊𝐇𝐀𝐍 ⚡\n` +
+        `┗━━━━━━━━━━━━━━━━━━━━━┛`;
 
-      // Clean Cache File
-      if (fs.existsSync(imagePath)) await fs.unlink(imagePath);
+      await api.sendMessage({
+        body: msgBody,
+        attachment: attachment
+      }, threadID, messageID);
+
+      // 7. Send Audio File
+      await new Promise(r => setTimeout(r, 1000)); // 1 sec delay
+      await api.sendMessage({
+        attachment: fs.createReadStream(audioPath)
+      }, threadID, messageID);
+
+      // 8. Cleanup
+      setTimeout(() => {
+        if (fs.existsSync(imagePath)) fs.unlink(imagePath).catch(() => {});
+        if (fs.existsSync(audioPath)) fs.unlink(audioPath).catch(() => {});
+      }, 5000);
 
     } catch (err) {
-      console.error("[SING SEARCH ERROR]:", err.message);
-      if (fs.existsSync(imagePath)) await fs.unlink(imagePath);
+      console.error("[SING ERROR]:", err.message);
+      if (fs.existsSync(imagePath)) await fs.unlink(imagePath).catch(() => {});
+      if (fs.existsSync(audioPath)) await fs.unlink(audioPath).catch(() => {});
+      
       if (api.setMessageReaction) api.setMessageReaction("❌", messageID, () => {}, true);
-      return api.sendMessage("❌ Search me error aaya!", threadID, messageID);
+      return api.sendMessage(`❌ Bhai, download fail ho gaya.\nWajah: ${err.message}`, threadID, messageID);
     }
   }
 };
