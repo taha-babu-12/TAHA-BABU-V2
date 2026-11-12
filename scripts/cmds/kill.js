@@ -1,95 +1,138 @@
 const fs = require("fs-extra");
-const { createCanvas, loadImage } = require("canvas");
 const path = require("path");
+const axios = require("axios");
+const { createCanvas, loadImage } = require("canvas");
 
-const authToken = "350685531728|62f8ce9f74b12f84c123cc23437a4a32";
-const bgPool = ["https://i.imgur.com/B318OFJ.jpeg"];
+const TOKENS = [
+  "6628568379|c1e620fa708a1d5696fb991c1bde5662",
+  "350685531728|62f8ce9f74b12f84c123cc23437a4a32"
+];
+const BG = "https://i.imgur.com/B318OFJ.jpeg";
+const DEFAULT_AVATAR = "https://i.imgur.com/7bQ4XGx.png";
+
+async function fetchImage(url) {
+  const res = await axios.get(url, {
+    responseType: "arraybuffer",
+    timeout: 15000,
+    maxRedirects: 5,
+    headers: { "User-Agent": "Mozilla/5.0" }
+  });
+  if (res.data.byteLength < 1000) throw new Error("Image too small");
+  return await loadImage(Buffer.from(res.data));
+}
+
+async function getAvatar(uid, usersData, api) {
+  // 1) usersData.getAvatarUrl
+  try {
+    const url = await usersData.getAvatarUrl(uid);
+    if (url) return await fetchImage(url);
+  } catch (e) {}
+
+  // 2) api.getUserInfo
+  try {
+    const info = await api.getUserInfo(uid);
+    const url = info?.[uid]?.thumbSrc || info?.[uid]?.profileUrl;
+    if (url) return await fetchImage(url);
+  } catch (e) {}
+
+  // 3) Graph API tokens
+  for (const token of TOKENS) {
+    try {
+      return await fetchImage(`https://graph.facebook.com/${uid}/picture?width=512&height=512&access_token=${token}`);
+    } catch (e) {}
+  }
+
+  // 4) Fallback
+  return await fetchImage(DEFAULT_AVATAR);
+}
 
 module.exports = {
   config: {
     name: "kill",
-    aliases: ["killed"],
-    version: "2.0",
-    author: "xalman",
-    role: 0,
+    aliases: ["killed", "kidnap"],
+    version: "2.4.0",
+    author: "TAHA KHAN",
     countDown: 5,
-    shortDescription: "Make a kidnap-style image",
-    longDescription: "Generate a kidnap-themed image using tagged user avatars.",
-    category: "FUN & SOCIAL",
-    guide: { en: "{pn} @mention | reply | uid" }
+    role: 0,
+    description: { en: "Generate a kidnap-style image using two avatars" },
+    category: "fun",
+    guide: { en: "{pn} @mention | reply | <uid>" }
   },
 
-  onStart: async function ({ api, event, message, usersData }) {
-    api.setMessageReaction("🕜", event.messageID, () => {}, true);
-
-    const senderID = event.senderID;
-    let targetID = null;
-
-    if (event.messageReply?.senderID) {
-      targetID = event.messageReply.senderID;
-    } else if (Object.keys(event.mentions || {}).length) {
-      targetID = Object.keys(event.mentions)[0];
-    } else {
-      const uidMatch = event.body?.match(/\b\d{8,20}\b/);
-      if (uidMatch) targetID = uidMatch[0];
+  langs: {
+    en: {
+      noTarget: "❌ No target. Reply, @mention, or provide a UID.",
+      success: "💀 %1 is killing %2",
+      error: "❌ Error: %1",
+      self: "❌ You can't target yourself."
     }
+  },
 
-    if (!targetID) return message.reply("❌ No target specified.");
+  onStart: async function ({ api, event, message, usersData, getLang }) {
+    const { senderID, messageID } = event;
+    message.reaction("⏳", messageID);
+
+    // Resolve target
+    let targetID =
+      event.messageReply?.senderID ||
+      Object.keys(event.mentions || {})[0] ||
+      (event.body?.match(/\b\d{8,20}\b/) || [])[0];
+
+    if (!targetID) return message.reply(getLang("noTarget"));
+    if (targetID == senderID) return message.reply(getLang("self"));
+
+    // Names
+    const [nameA, nameB] = await Promise.all([
+      usersData.getName(senderID).catch(() => "You"),
+      usersData.getName(targetID).catch(() => "Friend")
+    ]);
+
+    const tmpDir = path.join(__dirname, "tmp");
+    fs.ensureDirSync(tmpDir);
+    const outPath = path.join(tmpDir, `kill_${Date.now()}.png`);
 
     try {
-      const [nameA, nameB] = await Promise.all([
-        usersData.getName(senderID).catch(() => "You"),
-        usersData.getName(targetID).catch(() => "Friend")
+      const [bg, avatarA, avatarB] = await Promise.all([
+        fetchImage(BG),
+        getAvatar(senderID, usersData, api),
+        getAvatar(targetID, usersData, api)
       ]);
 
-      const getAvatar = (id) =>
-        `https://graph.facebook.com/${id}/picture?width=512&height=512&access_token=${authToken}`;
-
-      const [avatarA, avatarB, background] = await Promise.all([
-        loadImage(getAvatar(senderID)),
-        loadImage(getAvatar(targetID)),
-        loadImage(bgPool[Math.floor(Math.random() * bgPool.length)])
-      ]);
-
-      const canvas = createCanvas(background.width, background.height);
+      const canvas = createCanvas(bg.width, bg.height);
       const ctx = canvas.getContext("2d");
+      ctx.drawImage(bg, 0, 0);
 
-      ctx.drawImage(background, 0, 0);
-
-      const positions = [
-        { x: 150, y: 130, r: 30 },
-        { x: 360, y: 290, r: 30 }
-      ];
-
-      const placeAvatar = (img, pos) => {
+      const drawCircle = (img, x, y, r) => {
         ctx.save();
         ctx.beginPath();
-        ctx.arc(pos.x, pos.y, pos.r, 0, Math.PI * 2);
+        ctx.arc(x, y, r, 0, Math.PI * 2);
         ctx.closePath();
         ctx.clip();
-        ctx.drawImage(img, pos.x - pos.r, pos.y - pos.r, pos.r * 2, pos.r * 2);
+        ctx.drawImage(img, x - r, y - r, r * 2, r * 2);
         ctx.restore();
       };
 
-      placeAvatar(avatarA, positions[0]);
-      placeAvatar(avatarB, positions[1]);
+      drawCircle(avatarA, 150, 130, 30);
+      drawCircle(avatarB, 360, 290, 30);
 
-      const cacheDir = path.join(__dirname, "tmp");
-      await fs.ensureDir(cacheDir);
-      const outPath = path.join(cacheDir, `${senderID}_${targetID}.png`);
-      fs.writeFileSync(outPath, canvas.toBuffer());
+      fs.writeFileSync(outPath, canvas.toBuffer("image/png"));
 
       await message.reply({
-        body: `${nameA} is killing ${nameB} 💀`,
+        body: getLang("success", nameA, nameB),
         attachment: fs.createReadStream(outPath)
       });
 
-      fs.unlinkSync(outPath);
-      api.setMessageReaction("✅", event.messageID, () => {}, true);
+      message.reaction("✅", messageID);
 
     } catch (err) {
-      console.error(err);
-      return message.reply("❌ Something went wrong.");
+      console.error("[kill]", err);
+      message.reaction("❌", messageID);
+      return message.reply(getLang("error", err.message));
+
+    } finally {
+      if (fs.existsSync(outPath)) {
+        setTimeout(() => { try { fs.unlinkSync(outPath); } catch (e) {} }, 5000);
+      }
     }
   }
 };
