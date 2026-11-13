@@ -106,7 +106,7 @@ module.exports = {
     config: {
         name: "welcome",
         version: "9.3.0",
-        author: "TAHA KHAN",
+        author: "xalman",
         category: "events"
     },
     langs: {
