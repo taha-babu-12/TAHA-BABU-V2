@@ -52,7 +52,6 @@ async function createWelcomeCard(groupImg, userImg, groupName, userName, memberC
         return null;
     }
 
-    // Exact Canvas size based on the image you uploaded
     const width = bgImg.width; 
     const height = bgImg.height; 
     const canvas = createCanvas(width, height);
@@ -78,28 +77,26 @@ async function createWelcomeCard(groupImg, userImg, groupName, userName, memberC
         } catch (e) {}
     };
 
-    // 🔥 PICTURES POSITIONS (Frame ke andar perfect fit)
-    // Left Picture (Group)
-    await drawCircleImage(groupImg, 255, 420, 195); 
-    // Right Picture (User)
-    await drawCircleImage(userImg, 1415, 420, 195); 
+    // 🔥 PICTURES POSITIONS (Neeche shift kiya hai taake center mein aaye)
+    await drawCircleImage(groupImg, 255, 435, 195); // Left (Group)
+    await drawCircleImage(userImg, 1415, 435, 195); // Right (User)
 
-    // 🔥 TEXT POSITIONS (Bilkul dabbo ke center mein)
-    const titleFontSize = Math.floor(width * 0.038); // ~63px
+    // 🔥 TEXT POSITIONS & SIZES (Bada aur neeche kiya hai)
+    const titleFontSize = Math.floor(width * 0.045); // Pehle se bada font size
 
     // Left Box: Group Name
     let finalGroupName = groupName.toUpperCase();
-    draw3DText(ctx, finalGroupName, 255, 735, titleFontSize, '#ffffff', '#00f2fe', 400);
+    draw3DText(ctx, finalGroupName, 255, 745, titleFontSize, '#ffffff', '#00f2fe', 400);
 
-    // Right Box: User Name (Urdu/English)
-    draw3DText(ctx, userName, 1415, 735, titleFontSize, '#ffffff', '#f093fb', 400);
+    // Right Box: User Name
+    draw3DText(ctx, userName, 1415, 745, titleFontSize, '#ffffff', '#f093fb', 400);
 
-    // Center Top Box: Member Count (Y=525 dabbe ke center mein)
-    draw3DText(ctx, `${memberCount} MEMBERS`, 836, 525, titleFontSize, '#ffffff', '#00f2fe', 450);
+    // Center Top Box: Member Count (Y=540 exact center)
+    draw3DText(ctx, `${memberCount} MEMBERS`, 836, 540, titleFontSize, '#ffffff', '#00f2fe', 450);
 
-    // Center Bottom Box: Adder Name (Y=710 dabbe ke center mein)
+    // Center Bottom Box: Adder Name (Y=725 exact center)
     let finalAdderName = adderName.toUpperCase();
-    draw3DText(ctx, finalAdderName, 836, 710, titleFontSize, '#ffffff', '#f093fb', 450);
+    draw3DText(ctx, finalAdderName, 836, 725, titleFontSize, '#ffffff', '#f093fb', 450);
 
     return canvas.toBuffer();
 }
@@ -107,8 +104,8 @@ async function createWelcomeCard(groupImg, userImg, groupName, userName, memberC
 module.exports = {
     config: {
         name: "welcome",
-        version: "9.0.0",
-        author: "TAHA KHAN",
+        version: "9.1.0",
+        author: "xalman",
         category: "events"
     },
     langs: {
