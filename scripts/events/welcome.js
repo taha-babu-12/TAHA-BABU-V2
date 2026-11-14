@@ -77,10 +77,9 @@ async function createWelcomeCard(groupImg, userImg, groupName, userName, memberC
         } catch (e) {}
     };
 
-    // 🔥 PICTURES POSITIONS (Radius 162.5 yani size 325x325)
-    // Thoda adjust kiya hai taake ring ke center mein aaye
-    await drawCircleImage(groupImg, 255, 435, 162.5); // Left (Group)
-    await drawCircleImage(userImg, 1415, 435, 162.5); // Right (User)
+    // 🔥 PICTURES POSITIONS (Y ko 435 se 470 kar diya hai taake neeche aaye)
+    await drawCircleImage(groupImg, 255, 470, 162.5); // Left (Group)
+    await drawCircleImage(userImg, 1415, 470, 162.5); // Right (User)
 
     // 🔥 TEXT POSITIONS
     const titleFontSize = Math.floor(width * 0.045); 
@@ -92,8 +91,8 @@ async function createWelcomeCard(groupImg, userImg, groupName, userName, memberC
     // Right Box: User Name
     draw3DText(ctx, userName, 1415, 745, titleFontSize, '#ffffff', '#f093fb', 400);
 
-    // 🔥 Center Top Box: Member Count (525 kiya hai taake thoda upar aaye)
-    draw3DText(ctx, `${memberCount} MEMBERS`, 836, 525, titleFontSize, '#ffffff', '#00f2fe', 450);
+    // 🔥 Center Top Box: Member Count (Thoda adjust kiya hai)
+    draw3DText(ctx, `${memberCount} MEMBERS`, 836, 530, titleFontSize, '#ffffff', '#00f2fe', 450);
 
     // Center Bottom Box: Adder Name 
     let finalAdderName = adderName.toUpperCase();
@@ -105,8 +104,8 @@ async function createWelcomeCard(groupImg, userImg, groupName, userName, memberC
 module.exports = {
     config: {
         name: "welcome",
-        version: "9.3.0",
-        author: "xalman",
+        version: "9.4.0",
+        author: "TAHA KHAN",
         category: "events"
     },
     langs: {
